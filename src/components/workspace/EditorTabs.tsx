@@ -1,5 +1,6 @@
 import Editor from "@monaco-editor/react";
-import { X, Circle } from "lucide-react";
+import { X, Circle, Loader2 } from "lucide-react";
+import { useMemo } from "react";
 import type { OpenTab } from "./Workspace";
 
 export function EditorTabs({
@@ -50,24 +51,7 @@ export function EditorTabs({
       </div>
       <div className="relative flex-1 overflow-hidden bg-background">
         {active ? (
-          <Editor
-            key={active.id}
-            height="100%"
-            theme="vs-dark"
-            path={active.path}
-            language={active.language ?? "plaintext"}
-            value={active.content}
-            onChange={(v) => onChange(active.id, v ?? "")}
-            options={{
-              minimap: { enabled: false },
-              fontSize: 13,
-              fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-              scrollBeyondLastLine: false,
-              automaticLayout: true,
-              tabSize: 2,
-              wordWrap: "on",
-            }}
-          />
+          <ActiveEditor tab={active} onChange={onChange} />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             Select a file from the Explorer to start editing.
@@ -75,5 +59,59 @@ export function EditorTabs({
         )}
       </div>
     </div>
+  );
+}
+
+function ActiveEditor({
+  tab,
+  onChange,
+}: {
+  tab: OpenTab;
+  onChange: (id: string, content: string) => void;
+}) {
+  const lineCount = useMemo(() => tab.content.split("\n").length, [tab.content]);
+  const isLarge = lineCount > 1000;
+
+  return (
+    <>
+      <div className="absolute right-3 top-2 z-10 flex items-center gap-2 rounded bg-card/80 px-2 py-0.5 text-[10px] text-muted-foreground backdrop-blur">
+        <span>{lineCount.toLocaleString()} lines</span>
+        {isLarge && <span className="text-amber-400">large file</span>}
+      </div>
+      <Editor
+        key={tab.id}
+        height="100%"
+        theme="vs-dark"
+        path={tab.path}
+        language={tab.language ?? "plaintext"}
+        value={tab.content}
+        loading={
+          <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading editor…
+          </div>
+        }
+        onChange={(v) => onChange(tab.id, v ?? "")}
+        options={{
+          minimap: { enabled: !isLarge },
+          fontSize: 13,
+          fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+          scrollBeyondLastLine: false,
+          automaticLayout: true,
+          tabSize: 2,
+          wordWrap: isLarge ? "off" : "on",
+          smoothScrolling: true,
+          mouseWheelScrollSensitivity: 1.5,
+          fastScrollSensitivity: 7,
+          renderWhitespace: "selection",
+          // Large-file perf
+          renderValidationDecorations: isLarge ? "off" : "on",
+          folding: !isLarge,
+          occurrencesHighlight: isLarge ? "off" : "singleFile",
+          renderLineHighlight: isLarge ? "none" : "line",
+          stickyScroll: { enabled: !isLarge },
+        }}
+      />
+    </>
   );
 }
