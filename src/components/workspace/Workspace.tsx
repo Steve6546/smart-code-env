@@ -118,7 +118,7 @@ export function Workspace({ projectId, threadId }: { projectId: string; threadId
         </Button>
       </header>
 
-      <PanelGroup direction="horizontal" className="flex-1">
+      <PanelGroup orientation="horizontal" className="flex flex-1">
         <Panel defaultSize={18} minSize={12} className="flex flex-col border-r border-border bg-card">
           <FileTree
             projectId={projectId}
