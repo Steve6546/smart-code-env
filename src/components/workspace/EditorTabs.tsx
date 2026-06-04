@@ -1,5 +1,6 @@
 import Editor from "@monaco-editor/react";
-import { X, Circle } from "lucide-react";
+import { X, Circle, Loader2 } from "lucide-react";
+import { useMemo } from "react";
 import type { OpenTab } from "./Workspace";
 
 export function EditorTabs({
