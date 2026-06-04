@@ -111,6 +111,28 @@ function makeTools(supabase: SupabaseClient, userId: string, projectId: string) 
         return { ok: true, files: data };
       },
     }),
+    grep: tool({
+      description: "Search for a string pattern in all files in the project.",
+      inputSchema: z.object({ pattern: z.string() }),
+      execute: async ({ pattern }) => {
+        const { data, error } = await supabase
+          .from("files")
+          .select("path, content")
+          .eq("project_id", projectId)
+          .eq("is_folder", false)
+          .ilike("content", `%${pattern}%`);
+        if (error) return { ok: false, error: error.message };
+        if (!data || data.length === 0) return { ok: true, results: [] };
+        const results = data.map((file) => {
+          const lines = file.content.split("\n");
+          const matches = lines
+            .map((line: string, index: number) => ({ line, lineNumber: index + 1 }))
+            .filter(({ line }: { line: string }) => line.toLowerCase().includes(pattern.toLowerCase()));
+          return { path: file.path, matches };
+        });
+        return { ok: true, results };
+      },
+    }),
   };
 }
 
@@ -176,6 +198,7 @@ Available tools:
 - write_file: create a new file OR fully replace an existing one
 - delete_file: remove a file
 - rename_file: rename/move a file
+- grep: search for a pattern across all files in the project
 
 Project file tree:
 ${allFilePaths.length ? allFilePaths.map((p) => `  - ${p}`).join("\n") : "  (empty)"}

@@ -268,6 +268,7 @@ export function ChatPanel({
               <li>• "Create src/utils/auth.ts with JWT helpers"</li>
               <li>• "Rename src/main.py to src/app.py"</li>
               <li>• "Split this file into smaller modules"</li>
+              <li>• "Find where 'handleError' is used in the project"</li>
               <li>• "Delete README.md"</li>
             </ul>
           </div>
