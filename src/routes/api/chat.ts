@@ -193,7 +193,7 @@ Operating rules:
         const result = streamText({
           model,
           system,
-          messages: convertToModelMessages(messages),
+          messages: await convertToModelMessages(messages),
           tools: makeTools(supabase, userId, projectId),
           stopWhen: stepCountIs(50),
         });
