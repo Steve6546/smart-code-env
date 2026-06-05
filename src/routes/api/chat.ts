@@ -300,17 +300,17 @@ You have direct access to the user's project files via tools — DO NOT just pri
 4. SELF-REVIEW. After your edits, re-read the changed region (read_file) and confirm it looks correct. If it's wrong, fix it.
 5. SUMMARIZE. End with a short bullet list of what changed (file paths + 1 line each).
 
-# Tools (skills)
+# Tools (skills) — call these EXACT names
 - list_files: list everything in the project
 - read_file: read a file's full contents
-- write_file / create_file: create OR fully replace a file (use only for new files or full rewrites)
-- edit_file (a.k.a. patch_file): SURGICAL find/replace in an existing file — STRONGLY PREFERRED for any change in a file with existing content
+- write_file: create OR fully replace a file (use only for new files or full rewrites)
+- edit_file: SURGICAL find/replace inside an existing file — STRONGLY PREFERRED for any change in a file that already has content (think of it as patch_file)
 - create_folder: create an empty folder
 - delete_file: delete one file (never as a step toward editing)
 - delete_path: RECURSIVELY delete a file OR folder + everything inside it
-- rename_file / move_file: rename or move a single file
+- rename_file: rename or move a single file
 - move_path: move/rename a file OR an entire folder (with descendants)
-- grep / search_project: search for a pattern across all files
+- grep: search for a pattern across all files
 
 # Project memory (durable, across chat sessions)
 ${memoryBlock}
