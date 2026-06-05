@@ -73,7 +73,7 @@ function makeTools(supabase: SupabaseClient, userId: string, projectId: string) 
       },
     }),
     delete_file: tool({
-      description: "Delete a file from the current project by path.",
+      description: "Delete a single file from the current project by path.",
       inputSchema: z.object({ path: z.string() }),
       execute: async ({ path }) => {
         const { error } = await supabase
@@ -85,8 +85,40 @@ function makeTools(supabase: SupabaseClient, userId: string, projectId: string) 
         return { ok: true, action: "deleted", path };
       },
     }),
+    delete_path: tool({
+      description:
+        "Recursively delete a file OR folder and EVERYTHING inside it. Use for folders or bulk cleanup.",
+      inputSchema: z.object({ path: z.string() }),
+      execute: async ({ path }) => {
+        const prefix = path.replace(/\/+$/, "");
+        const { error } = await supabase
+          .from("files")
+          .delete()
+          .eq("project_id", projectId)
+          .or(`path.eq.${prefix},path.like.${prefix}/%`);
+        if (error) return { ok: false, error: error.message };
+        return { ok: true, action: "deleted", path };
+      },
+    }),
+    create_folder: tool({
+      description: "Create an empty folder at the given path.",
+      inputSchema: z.object({ path: z.string() }),
+      execute: async ({ path }) => {
+        const clean = path.replace(/\/+$/, "");
+        const { error } = await supabase.from("files").insert({
+          project_id: projectId,
+          user_id: userId,
+          path: clean,
+          content: "",
+          language: null,
+          is_folder: true,
+        });
+        if (error) return { ok: false, error: error.message };
+        return { ok: true, action: "created", path: clean };
+      },
+    }),
     rename_file: tool({
-      description: "Rename or move a file to a new path.",
+      description: "Rename or move a single file to a new path.",
       inputSchema: z.object({ from: z.string(), to: z.string() }),
       execute: async ({ from, to }) => {
         const { error } = await supabase
@@ -96,6 +128,60 @@ function makeTools(supabase: SupabaseClient, userId: string, projectId: string) 
           .eq("path", from);
         if (error) return { ok: false, error: error.message };
         return { ok: true, action: "renamed", from, to };
+      },
+    }),
+    move_path: tool({
+      description:
+        "Move or rename a file OR an entire folder (with all descendants). Rewrites the path prefix on every nested file.",
+      inputSchema: z.object({ from: z.string(), to: z.string() }),
+      execute: async ({ from, to }) => {
+        const f = from.replace(/\/+$/, "");
+        const t = to.replace(/\/+$/, "");
+        const { data: rows, error: ferr } = await supabase
+          .from("files")
+          .select("id, path, is_folder")
+          .eq("project_id", projectId)
+          .or(`path.eq.${f},path.like.${f}/%`);
+        if (ferr) return { ok: false, error: ferr.message };
+        for (const r of rows ?? []) {
+          const np = r.path === f ? t : t + r.path.slice(f.length);
+          await supabase
+            .from("files")
+            .update({ path: np, language: r.is_folder ? null : langFromPath(np) })
+            .eq("id", r.id);
+        }
+        return { ok: true, action: "renamed", from: f, to: t, moved: rows?.length ?? 0 };
+      },
+    }),
+    edit_file: tool({
+      description:
+        "Apply a precise string replacement to an existing file. Use this for SMALL/TARGETED edits instead of rewriting the whole file. `find` must occur exactly once in the file — include enough surrounding context to be unique. For larger rewrites, use write_file instead.",
+      inputSchema: z.object({
+        path: z.string(),
+        find: z.string().min(1),
+        replace: z.string(),
+      }),
+      execute: async ({ path, find, replace }) => {
+        const { data: file, error: ferr } = await supabase
+          .from("files")
+          .select("id, content")
+          .eq("project_id", projectId)
+          .eq("path", path)
+          .eq("is_folder", false)
+          .maybeSingle();
+        if (ferr) return { ok: false, error: ferr.message };
+        if (!file) return { ok: false, error: "File not found" };
+        const idx = file.content.indexOf(find);
+        if (idx === -1) return { ok: false, error: "`find` string not found in file" };
+        if (file.content.indexOf(find, idx + find.length) !== -1)
+          return { ok: false, error: "`find` matches multiple times — add more surrounding context" };
+        const next = file.content.slice(0, idx) + replace + file.content.slice(idx + find.length);
+        const { error: uerr } = await supabase
+          .from("files")
+          .update({ content: next })
+          .eq("id", file.id);
+        if (uerr) return { ok: false, error: uerr.message };
+        return { ok: true, action: "updated", path };
       },
     }),
     list_files: tool({
