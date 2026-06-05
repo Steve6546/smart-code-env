@@ -275,35 +275,56 @@ export const Route = createFileRoute("/api/chat")({
               .join("\n\n")
           : "(no files currently open)";
 
+        // Load durable project memory (past agent actions / goals)
+        const { data: memoryRows } = await supabase
+          .from("project_memory")
+          .select("kind, content, created_at")
+          .eq("project_id", projectId)
+          .order("created_at", { ascending: false })
+          .limit(25);
+        const memoryBlock = memoryRows && memoryRows.length
+          ? memoryRows
+              .slice()
+              .reverse()
+              .map((r) => `- [${r.kind}] ${r.content}`)
+              .join("\n")
+          : "(no prior memory yet)";
+
         const system = `You are CodeMind, an autonomous AI coding agent embedded in a code editor.
 You have direct access to the user's project files via tools — DO NOT just print code and ask the user to copy it. ACT on the project.
 
-Available tools:
-- list_files: list everything in the project
-- read_file: read a file you don't have open yet
-- write_file: create OR fully replace a file
-- edit_file: precise string find/replace inside an existing file (preferred for small/targeted edits)
-- create_folder: create an empty folder
-- delete_file: delete one file
-- delete_path: RECURSIVELY delete a file OR folder + everything inside it
-- rename_file: rename/move a single file
-- move_path: move/rename a file OR an entire folder (with all descendants)
-- grep: search for a pattern across all files
+# Operating loop (MANDATORY)
+1. THINK FIRST. Briefly state your plan in 1-3 short sentences BEFORE any tool call.
+2. READ before you write. If you are about to edit a file you haven't seen in this turn, call read_file first.
+3. PATCH, don't rewrite. For files >100 lines, use edit_file (surgical find/replace). NEVER delete a file just to recreate it with edits — that destroys history.
+4. SELF-REVIEW. After your edits, re-read the changed region (read_file) and confirm it looks correct. If it's wrong, fix it.
+5. SUMMARIZE. End with a short bullet list of what changed (file paths + 1 line each).
 
-Project file tree:
+# Tools (skills)
+- list_files: list everything in the project
+- read_file: read a file's full contents
+- write_file / create_file: create OR fully replace a file (use only for new files or full rewrites)
+- edit_file (a.k.a. patch_file): SURGICAL find/replace in an existing file — STRONGLY PREFERRED for any change in a file with existing content
+- create_folder: create an empty folder
+- delete_file: delete one file (never as a step toward editing)
+- delete_path: RECURSIVELY delete a file OR folder + everything inside it
+- rename_file / move_file: rename or move a single file
+- move_path: move/rename a file OR an entire folder (with descendants)
+- grep / search_project: search for a pattern across all files
+
+# Project memory (durable, across chat sessions)
+${memoryBlock}
+
+# Project file tree
 ${allFilePaths.length ? allFilePaths.map((p) => `  - ${p}`).join("\n") : "  (empty)"}
 
-Currently OPEN files (full source):
+# Currently OPEN files (full source)
 ${fileContext}
 
-Operating rules:
-- When the user asks for a change, USE THE TOOLS to apply it directly. Do not print code for the user to paste.
-- Prefer edit_file for small/surgical changes. Use write_file only when the file is new or you are rewriting most of it.
-- Before editing a file you have not seen, call read_file first.
-- write_file replaces the WHOLE file — always include the complete final contents.
-- For folders: use create_folder, delete_path (recursive), move_path.
-- After tool calls, give a brief summary (file paths + 1-line per change). Keep prose short.
-- Only show code blocks when the user explicitly asks to see code without applying it. Prefix such code blocks with the file path as a comment on line 1.`;
+# Output rules
+- Keep prose short. Show your plan, then act, then summarize.
+- Only show code blocks when the user explicitly asks to SEE code instead of applying it. Prefix such blocks with the file path as a comment on line 1.
+- If the user gives an instruction that is destructive, confirm it inline before running delete_path on a folder with many files.`;
 
         const result = streamText({
           model,
@@ -327,6 +348,31 @@ Operating rules:
                 .from("chat_threads")
                 .update({ updated_at: new Date().toISOString() })
                 .eq("id", threadId);
+
+              // Snapshot what the agent did into project memory so future
+              // sessions can resume context.
+              const touched: string[] = [];
+              for (const p of responseMessage.parts as Array<{
+                type: string;
+                toolName?: string;
+                input?: { path?: string; from?: string; to?: string };
+                output?: { ok?: boolean; action?: string };
+              }>) {
+                if (!p.type.startsWith("tool-")) continue;
+                if (!p.output?.ok) continue;
+                const tool = p.toolName ?? p.type.replace(/^tool-/, "");
+                const path = p.input?.path ?? (p.input?.to ? `${p.input.from} → ${p.input.to}` : "");
+                if (path) touched.push(`${tool}: ${path}`);
+              }
+              if (touched.length) {
+                await supabase.from("project_memory").insert({
+                  project_id: projectId,
+                  user_id: userId,
+                  thread_id: threadId,
+                  kind: "actions",
+                  content: touched.slice(0, 20).join("; "),
+                });
+              }
             } catch (e) {
               console.error("persist assistant failed", e);
             }
