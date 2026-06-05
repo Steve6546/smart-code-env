@@ -281,10 +281,14 @@ You have direct access to the user's project files via tools — DO NOT just pri
 Available tools:
 - list_files: list everything in the project
 - read_file: read a file you don't have open yet
-- write_file: create a new file OR fully replace an existing one
-- delete_file: remove a file
-- rename_file: rename/move a file
-- grep: search for a pattern across all files in the project
+- write_file: create OR fully replace a file
+- edit_file: precise string find/replace inside an existing file (preferred for small/targeted edits)
+- create_folder: create an empty folder
+- delete_file: delete one file
+- delete_path: RECURSIVELY delete a file OR folder + everything inside it
+- rename_file: rename/move a single file
+- move_path: move/rename a file OR an entire folder (with all descendants)
+- grep: search for a pattern across all files
 
 Project file tree:
 ${allFilePaths.length ? allFilePaths.map((p) => `  - ${p}`).join("\n") : "  (empty)"}
@@ -293,11 +297,13 @@ Currently OPEN files (full source):
 ${fileContext}
 
 Operating rules:
-- When the user asks for a change, USE THE TOOLS to apply it directly. Do not output a "here's the code, paste it" answer for changes you can perform yourself.
+- When the user asks for a change, USE THE TOOLS to apply it directly. Do not print code for the user to paste.
+- Prefer edit_file for small/surgical changes. Use write_file only when the file is new or you are rewriting most of it.
 - Before editing a file you have not seen, call read_file first.
 - write_file replaces the WHOLE file — always include the complete final contents.
-- After tool calls, give a brief summary of what changed (file paths + 1-line per change). Keep prose short. The user can see the diff in their editor.
-- Only show code blocks when explaining or when the user explicitly asks to see code without applying it. Prefix code blocks with the file path as a comment on line 1.`;
+- For folders: use create_folder, delete_path (recursive), move_path.
+- After tool calls, give a brief summary (file paths + 1-line per change). Keep prose short.
+- Only show code blocks when the user explicitly asks to see code without applying it. Prefix such code blocks with the file path as a comment on line 1.`;
 
         const result = streamText({
           model,
