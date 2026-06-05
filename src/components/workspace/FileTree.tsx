@@ -183,13 +183,22 @@ export function FileTree({
         <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           Explorer
         </span>
-        <button
-          onClick={newFile}
-          className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-          title="New file"
-        >
-          <Plus className="h-3.5 w-3.5" />
-        </button>
+        <div className="flex items-center gap-0.5">
+          <button
+            onClick={newFolder}
+            className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+            title="New folder"
+          >
+            <FolderPlus className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={newFile}
+            className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+            title="New file"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
       <div className="flex-1 overflow-auto py-1">{renderNode(tree, 0)}</div>
     </div>
