@@ -162,6 +162,54 @@ export const deleteFile = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+// Recursive delete a path (file OR folder + everything beneath it)
+export const deletePath = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ projectId: z.string().uuid(), path: z.string().min(1) }).parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    const prefix = data.path.replace(/\/+$/, "");
+    const { error } = await context.supabase
+      .from("files")
+      .delete()
+      .eq("project_id", data.projectId)
+      .or(`path.eq.${prefix},path.like.${prefix}/%`);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+// Move / rename a file OR folder (rewrites prefix on all descendants)
+export const movePath = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        projectId: z.string().uuid(),
+        from: z.string().min(1),
+        to: z.string().min(1).max(500),
+      })
+      .parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    const from = data.from.replace(/\/+$/, "");
+    const to = data.to.replace(/\/+$/, "");
+    const { data: rows, error: ferr } = await context.supabase
+      .from("files")
+      .select("id, path, is_folder")
+      .eq("project_id", data.projectId)
+      .or(`path.eq.${from},path.like.${from}/%`);
+    if (ferr) throw new Error(ferr.message);
+    for (const r of rows ?? []) {
+      const newPath = r.path === from ? to : to + r.path.slice(from.length);
+      await context.supabase
+        .from("files")
+        .update({ path: newPath, language: r.is_folder ? null : langFromPath(newPath) })
+        .eq("id", r.id);
+    }
+    return { ok: true, moved: rows?.length ?? 0 };
+  });
+
 export const listThreads = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ projectId: z.string().uuid() }).parse(d))
