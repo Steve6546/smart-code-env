@@ -85,6 +85,13 @@ export function Workspace({ projectId, threadId }: { projectId: string; threadId
     }, 600);
   };
 
+  // Live-update an open tab when the agent writes that path. Avoids editor flicker.
+  const applyAgentWrite = (path: string, content: string) => {
+    setTabs((prev) =>
+      prev.map((t) => (t.path === path ? { ...t, content, dirty: false } : t)),
+    );
+  };
+
   // After file create/delete/rename, refresh open tabs that may have changed.
   useEffect(() => {
     if (!filesQuery.data) return;
