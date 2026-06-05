@@ -158,6 +158,7 @@ export function Workspace({ projectId, threadId }: { projectId: string; threadId
             }))}
             allFilePaths={allPaths}
             activeFilePath={activeTab?.path}
+            onAgentWrite={applyAgentWrite}
           />
         </Panel>
       </PanelGroup>
