@@ -158,12 +158,14 @@ export function ChatPanel({
   openFiles,
   allFilePaths,
   activeFilePath,
+  onAgentWrite,
 }: {
   projectId: string;
   threadId: string;
   openFiles: OpenFile[];
   allFilePaths: string[];
   activeFilePath?: string;
+  onAgentWrite?: (path: string, content: string) => void;
 }) {
   const qc = useQueryClient();
   const listFn = useServerFn(listMessages);
