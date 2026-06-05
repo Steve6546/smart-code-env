@@ -255,11 +255,16 @@ export function ChatPanel({
         touched = true;
         if (tool === "write_file" && p.input?.path && typeof p.input.content === "string") {
           onAgentWrite?.(p.input.path, p.input.content);
+        } else if (tool === "edit_file" && p.input?.path) {
+          onAgentTouchPath?.(p.input.path);
+        } else if (tool === "move_path" || tool === "rename_file") {
+          if (p.input?.from) onAgentTouchPath?.(p.input.from);
+          if (p.input?.to) onAgentTouchPath?.(p.input.to);
         }
       }
     }
     if (touched) qc.invalidateQueries({ queryKey: ["files", projectId] });
-  }, [messages, qc, projectId, onAgentWrite]);
+  }, [messages, qc, projectId, onAgentWrite, onAgentTouchPath]);
 
   const isLoading = status === "submitted" || status === "streaming";
 
