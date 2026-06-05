@@ -3,7 +3,7 @@ import { Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
-import { Code2, ArrowLeft, LogOut } from "lucide-react";
+import { Code2, ArrowLeft, LogOut, FolderTree, FileCode, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { FileTree } from "./FileTree";
@@ -24,6 +24,8 @@ export type OpenTab = {
   dirty: boolean;
 };
 
+type MobileView = "files" | "editor" | "chat";
+
 export function Workspace({ projectId, threadId }: { projectId: string; threadId: string }) {
   const router = useRouter();
   const navigate = useNavigate();
@@ -39,11 +41,13 @@ export function Workspace({ projectId, threadId }: { projectId: string; threadId
 
   const [tabs, setTabs] = useState<OpenTab[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [mobileView, setMobileView] = useState<MobileView>("chat");
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const openFile = async (id: string) => {
     if (tabs.find((t) => t.id === id)) {
       setActiveId(id);
+      setMobileView("editor");
       return;
     }
     const f = await getFileFn({ data: { id } });
@@ -52,6 +56,7 @@ export function Workspace({ projectId, threadId }: { projectId: string; threadId
       { id: f.id, path: f.path, language: f.language, content: f.content, dirty: false },
     ]);
     setActiveId(id);
+    setMobileView("editor");
   };
 
   const closeTab = (id: string) => {
@@ -85,15 +90,12 @@ export function Workspace({ projectId, threadId }: { projectId: string; threadId
     }, 600);
   };
 
-  // Live-update an open tab when the agent writes that path. Avoids editor flicker.
   const applyAgentWrite = (path: string, content: string) => {
     setTabs((prev) =>
       prev.map((t) => (t.path === path ? { ...t, content, dirty: false } : t)),
     );
   };
 
-  // For tools that mutated a path without giving us the new content
-  // (edit_file, move_path), re-fetch by id so the open tab reflects truth.
   const refreshOpenByPath = async (path: string) => {
     const tab = tabs.find((t) => t.path === path);
     if (!tab) return;
@@ -107,7 +109,6 @@ export function Workspace({ projectId, threadId }: { projectId: string; threadId
     }
   };
 
-  // After file create/delete/rename, refresh open tabs that may have changed.
   useEffect(() => {
     if (!filesQuery.data) return;
     const ids = new Set(filesQuery.data.map((f) => f.id));
@@ -123,61 +124,103 @@ export function Workspace({ projectId, threadId }: { projectId: string; threadId
   const activeTab = tabs.find((t) => t.id === activeId) ?? null;
   const allPaths = (filesQuery.data ?? []).filter((f) => !f.is_folder).map((f) => f.path);
 
+  const filesPanel = (
+    <FileTree
+      projectId={projectId}
+      files={filesQuery.data ?? []}
+      onOpen={openFile}
+      onChanged={() => qc.invalidateQueries({ queryKey: ["files", projectId] })}
+      activeFileId={activeId}
+    />
+  );
+  const editorPanel = (
+    <EditorTabs
+      tabs={tabs}
+      activeId={activeId}
+      onActivate={setActiveId}
+      onClose={closeTab}
+      onChange={onChangeContent}
+    />
+  );
+  const chatPanel = (
+    <>
+      <ThreadList projectId={projectId} activeThreadId={threadId} />
+      <ChatPanel
+        projectId={projectId}
+        threadId={threadId}
+        openFiles={tabs.map((t) => ({
+          path: t.path,
+          language: t.language,
+          content: t.content,
+        }))}
+        allFilePaths={allPaths}
+        activeFilePath={activeTab?.path}
+        onAgentWrite={applyAgentWrite}
+        onAgentTouchPath={refreshOpenByPath}
+      />
+    </>
+  );
+
   return (
-    <div className="flex h-screen flex-col bg-background text-foreground">
-      <header className="flex h-12 flex-shrink-0 items-center justify-between border-b border-border bg-card px-4">
-        <div className="flex items-center gap-3">
+    <div className="flex h-[100dvh] flex-col bg-background text-foreground">
+      <header className="flex h-12 flex-shrink-0 items-center justify-between border-b border-border bg-card px-3 sm:px-4">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <Link to="/" className="flex items-center gap-2 text-muted-foreground hover:text-foreground">
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
             <Code2 className="h-4 w-4" />
           </div>
-          <span className="text-sm font-semibold">CodeMind</span>
+          <span className="text-sm font-semibold truncate">CodeMind</span>
         </div>
         <Button variant="ghost" size="sm" onClick={signOut}>
           <LogOut className="h-4 w-4" />
         </Button>
       </header>
 
-      <PanelGroup orientation="horizontal" className="flex flex-1">
-        <Panel defaultSize={18} minSize={12} className="flex flex-col border-r border-border bg-card">
-          <FileTree
-            projectId={projectId}
-            files={filesQuery.data ?? []}
-            onOpen={openFile}
-            onChanged={() => qc.invalidateQueries({ queryKey: ["files", projectId] })}
-            activeFileId={activeId}
-          />
-        </Panel>
-        <PanelResizeHandle className="w-px bg-border hover:bg-primary/40" />
-        <Panel defaultSize={54} minSize={30} className="flex flex-col">
-          <EditorTabs
-            tabs={tabs}
-            activeId={activeId}
-            onActivate={setActiveId}
-            onClose={closeTab}
-            onChange={onChangeContent}
-          />
-        </Panel>
-        <PanelResizeHandle className="w-px bg-border hover:bg-primary/40" />
-        <Panel defaultSize={28} minSize={20} className="flex flex-col border-l border-border bg-card">
-          <ThreadList projectId={projectId} activeThreadId={threadId} />
-          <ChatPanel
-            projectId={projectId}
-            threadId={threadId}
-            openFiles={tabs.map((t) => ({
-              path: t.path,
-              language: t.language,
-              content: t.content,
-            }))}
-            allFilePaths={allPaths}
-            activeFilePath={activeTab?.path}
-            onAgentWrite={applyAgentWrite}
-            onAgentTouchPath={refreshOpenByPath}
-          />
-        </Panel>
-      </PanelGroup>
+      {/* Desktop / tablet: 3 resizable panels */}
+      <div className="hidden md:flex flex-1 min-h-0">
+        <PanelGroup orientation="horizontal" className="flex flex-1">
+          <Panel defaultSize={18} minSize={12} className="flex flex-col border-r border-border bg-card">
+            {filesPanel}
+          </Panel>
+          <PanelResizeHandle className="w-px bg-border hover:bg-primary/40" />
+          <Panel defaultSize={52} minSize={30} className="flex flex-col">
+            {editorPanel}
+          </Panel>
+          <PanelResizeHandle className="w-px bg-border hover:bg-primary/40" />
+          <Panel defaultSize={30} minSize={20} className="flex flex-col border-l border-border bg-card">
+            {chatPanel}
+          </Panel>
+        </PanelGroup>
+      </div>
+
+      {/* Mobile: tab switcher */}
+      <div className="flex md:hidden flex-1 flex-col min-h-0">
+        <div className="flex-1 min-h-0 flex flex-col">
+          {mobileView === "files" && <div className="flex h-full flex-col bg-card">{filesPanel}</div>}
+          {mobileView === "editor" && <div className="flex h-full flex-col">{editorPanel}</div>}
+          {mobileView === "chat" && <div className="flex h-full flex-col bg-card">{chatPanel}</div>}
+        </div>
+        <nav className="grid grid-cols-3 border-t border-border bg-card text-xs">
+          {([
+            { id: "files", label: "Files", Icon: FolderTree },
+            { id: "editor", label: "Editor", Icon: FileCode },
+            { id: "chat", label: "Chat", Icon: MessageSquare },
+          ] as const).map(({ id, label, Icon }) => (
+            <button
+              key={id}
+              onClick={() => setMobileView(id)}
+              className={`flex flex-col items-center gap-0.5 py-2 ${
+                mobileView === id ? "text-primary" : "text-muted-foreground"
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              <span>{label}</span>
+            </button>
+          ))}
+        </nav>
+      </div>
     </div>
   );
 }
