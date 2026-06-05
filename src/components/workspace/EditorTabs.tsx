@@ -94,7 +94,7 @@ function ActiveEditor({
         onChange={(v) => onChange(tab.id, v ?? "")}
         options={{
           minimap: { enabled: !isLarge },
-          fontSize: 13,
+          fontSize: 14,
           fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
           scrollBeyondLastLine: false,
           automaticLayout: true,
