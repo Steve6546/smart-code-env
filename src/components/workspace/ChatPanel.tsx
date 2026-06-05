@@ -158,12 +158,16 @@ export function ChatPanel({
   openFiles,
   allFilePaths,
   activeFilePath,
+  onAgentWrite,
+  onAgentTouchPath,
 }: {
   projectId: string;
   threadId: string;
   openFiles: OpenFile[];
   allFilePaths: string[];
   activeFilePath?: string;
+  onAgentWrite?: (path: string, content: string) => void;
+  onAgentTouchPath?: (path: string) => void;
 }) {
   const qc = useQueryClient();
   const listFn = useServerFn(listMessages);
@@ -226,13 +230,41 @@ export function ChatPanel({
     inputRef.current?.focus();
   }, [threadId, status]);
 
-  // Refetch files whenever the assistant likely mutated them (tool calls present).
-  const lastMsgFingerprint = messages
-    .map((m) => m.parts.filter((p) => p.type.startsWith("tool-")).length)
-    .join(",");
+  // React to completed file-mutating tool calls: refresh file tree + push
+  // new content into any open tab so the editor updates live without flicker.
+  const seenToolCallsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    qc.invalidateQueries({ queryKey: ["files", projectId] });
-  }, [lastMsgFingerprint, qc, projectId]);
+    let touched = false;
+    for (const m of messages) {
+      if (m.role !== "assistant") continue;
+      for (const p of m.parts as Array<{
+        type: string;
+        state?: string;
+        toolCallId?: string;
+        toolName?: string;
+        input?: { path?: string; from?: string; to?: string; content?: string };
+        output?: { ok?: boolean; action?: string };
+      }>) {
+        if (!p.type.startsWith("tool-")) continue;
+        if (p.state !== "output-available") continue;
+        const id = p.toolCallId ?? `${m.id}-${p.type}`;
+        if (seenToolCallsRef.current.has(id)) continue;
+        seenToolCallsRef.current.add(id);
+        if (!p.output?.ok) continue;
+        const tool = p.toolName ?? p.type.replace(/^tool-/, "");
+        touched = true;
+        if (tool === "write_file" && p.input?.path && typeof p.input.content === "string") {
+          onAgentWrite?.(p.input.path, p.input.content);
+        } else if (tool === "edit_file" && p.input?.path) {
+          onAgentTouchPath?.(p.input.path);
+        } else if (tool === "move_path" || tool === "rename_file") {
+          if (p.input?.from) onAgentTouchPath?.(p.input.from);
+          if (p.input?.to) onAgentTouchPath?.(p.input.to);
+        }
+      }
+    }
+    if (touched) qc.invalidateQueries({ queryKey: ["files", projectId] });
+  }, [messages, qc, projectId, onAgentWrite, onAgentTouchPath]);
 
   const isLoading = status === "submitted" || status === "streaming";
 

@@ -8,10 +8,11 @@ import {
   Folder,
   FolderOpen,
   Plus,
+  FolderPlus,
   Trash2,
   Pencil,
 } from "lucide-react";
-import { createFile, deleteFile, renameFile } from "@/lib/workspace.functions";
+import { createFile, deletePath, movePath } from "@/lib/workspace.functions";
 import { toast } from "sonner";
 
 type FileRow = {
@@ -64,27 +65,34 @@ export function FileTree({
   const tree = useMemo(() => buildTree(files), [files]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["src"]));
   const createFn = useServerFn(createFile);
-  const deleteFn = useServerFn(deleteFile);
-  const renameFn = useServerFn(renameFile);
+  const deletePathFn = useServerFn(deletePath);
+  const movePathFn = useServerFn(movePath);
 
   const createMut = useMutation({
-    mutationFn: (path: string) => createFn({ data: { projectId, path } }),
+    mutationFn: (v: { path: string; isFolder?: boolean }) =>
+      createFn({ data: { projectId, path: v.path, isFolder: v.isFolder } }),
     onSuccess: () => onChanged(),
     onError: (e: Error) => toast.error(e.message),
   });
   const delMut = useMutation({
-    mutationFn: (id: string) => deleteFn({ data: { id } }),
+    mutationFn: (path: string) => deletePathFn({ data: { projectId, path } }),
     onSuccess: () => onChanged(),
+    onError: (e: Error) => toast.error(e.message),
   });
   const renameMut = useMutation({
-    mutationFn: (v: { id: string; path: string }) => renameFn({ data: v }),
+    mutationFn: (v: { from: string; to: string }) =>
+      movePathFn({ data: { projectId, from: v.from, to: v.to } }),
     onSuccess: () => onChanged(),
     onError: (e: Error) => toast.error(e.message),
   });
 
   const newFile = () => {
     const path = prompt("New file path (e.g. src/utils.ts)");
-    if (path?.trim()) createMut.mutate(path.trim());
+    if (path?.trim()) createMut.mutate({ path: path.trim() });
+  };
+  const newFolder = () => {
+    const path = prompt("New folder path (e.g. src/components)");
+    if (path?.trim()) createMut.mutate({ path: path.trim(), isFolder: true });
   };
 
   const toggle = (p: string) => {
@@ -139,28 +147,29 @@ export function FileTree({
                 <span className="truncate">{child.name}</span>
               </button>
             )}
-            {child.file && (
-              <div className="flex opacity-0 group-hover:opacity-100">
-                <button
-                  className="rounded p-0.5 hover:bg-background"
-                  onClick={() => {
-                    const np = prompt("Rename to", child.file!.path);
-                    if (np && np !== child.file!.path)
-                      renameMut.mutate({ id: child.file!.id, path: np });
-                  }}
-                >
-                  <Pencil className="h-3 w-3" />
-                </button>
-                <button
-                  className="rounded p-0.5 hover:bg-background hover:text-destructive"
-                  onClick={() => {
-                    if (confirm(`Delete ${child.path}?`)) delMut.mutate(child.file!.id);
-                  }}
-                >
-                  <Trash2 className="h-3 w-3" />
-                </button>
-              </div>
-            )}
+            <div className="flex opacity-0 group-hover:opacity-100">
+              <button
+                className="rounded p-0.5 hover:bg-background"
+                onClick={() => {
+                  const np = prompt("Rename / move to", child.path);
+                  if (np && np !== child.path)
+                    renameMut.mutate({ from: child.path, to: np });
+                }}
+              >
+                <Pencil className="h-3 w-3" />
+              </button>
+              <button
+                className="rounded p-0.5 hover:bg-background hover:text-destructive"
+                onClick={() => {
+                  const msg = isFolder
+                    ? `Delete folder "${child.path}" and EVERYTHING inside it?`
+                    : `Delete ${child.path}?`;
+                  if (confirm(msg)) delMut.mutate(child.path);
+                }}
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </div>
           </div>
           {isFolder && isOpen && renderNode(child, depth + 1)}
         </div>
@@ -174,13 +183,22 @@ export function FileTree({
         <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           Explorer
         </span>
-        <button
-          onClick={newFile}
-          className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-          title="New file"
-        >
-          <Plus className="h-3.5 w-3.5" />
-        </button>
+        <div className="flex items-center gap-0.5">
+          <button
+            onClick={newFolder}
+            className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+            title="New folder"
+          >
+            <FolderPlus className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={newFile}
+            className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+            title="New file"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
       <div className="flex-1 overflow-auto py-1">{renderNode(tree, 0)}</div>
     </div>

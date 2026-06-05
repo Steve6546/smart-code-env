@@ -73,7 +73,7 @@ function makeTools(supabase: SupabaseClient, userId: string, projectId: string) 
       },
     }),
     delete_file: tool({
-      description: "Delete a file from the current project by path.",
+      description: "Delete a single file from the current project by path.",
       inputSchema: z.object({ path: z.string() }),
       execute: async ({ path }) => {
         const { error } = await supabase
@@ -85,8 +85,40 @@ function makeTools(supabase: SupabaseClient, userId: string, projectId: string) 
         return { ok: true, action: "deleted", path };
       },
     }),
+    delete_path: tool({
+      description:
+        "Recursively delete a file OR folder and EVERYTHING inside it. Use for folders or bulk cleanup.",
+      inputSchema: z.object({ path: z.string() }),
+      execute: async ({ path }) => {
+        const prefix = path.replace(/\/+$/, "");
+        const { error } = await supabase
+          .from("files")
+          .delete()
+          .eq("project_id", projectId)
+          .or(`path.eq.${prefix},path.like.${prefix}/%`);
+        if (error) return { ok: false, error: error.message };
+        return { ok: true, action: "deleted", path };
+      },
+    }),
+    create_folder: tool({
+      description: "Create an empty folder at the given path.",
+      inputSchema: z.object({ path: z.string() }),
+      execute: async ({ path }) => {
+        const clean = path.replace(/\/+$/, "");
+        const { error } = await supabase.from("files").insert({
+          project_id: projectId,
+          user_id: userId,
+          path: clean,
+          content: "",
+          language: null,
+          is_folder: true,
+        });
+        if (error) return { ok: false, error: error.message };
+        return { ok: true, action: "created", path: clean };
+      },
+    }),
     rename_file: tool({
-      description: "Rename or move a file to a new path.",
+      description: "Rename or move a single file to a new path.",
       inputSchema: z.object({ from: z.string(), to: z.string() }),
       execute: async ({ from, to }) => {
         const { error } = await supabase
@@ -96,6 +128,60 @@ function makeTools(supabase: SupabaseClient, userId: string, projectId: string) 
           .eq("path", from);
         if (error) return { ok: false, error: error.message };
         return { ok: true, action: "renamed", from, to };
+      },
+    }),
+    move_path: tool({
+      description:
+        "Move or rename a file OR an entire folder (with all descendants). Rewrites the path prefix on every nested file.",
+      inputSchema: z.object({ from: z.string(), to: z.string() }),
+      execute: async ({ from, to }) => {
+        const f = from.replace(/\/+$/, "");
+        const t = to.replace(/\/+$/, "");
+        const { data: rows, error: ferr } = await supabase
+          .from("files")
+          .select("id, path, is_folder")
+          .eq("project_id", projectId)
+          .or(`path.eq.${f},path.like.${f}/%`);
+        if (ferr) return { ok: false, error: ferr.message };
+        for (const r of rows ?? []) {
+          const np = r.path === f ? t : t + r.path.slice(f.length);
+          await supabase
+            .from("files")
+            .update({ path: np, language: r.is_folder ? null : langFromPath(np) })
+            .eq("id", r.id);
+        }
+        return { ok: true, action: "renamed", from: f, to: t, moved: rows?.length ?? 0 };
+      },
+    }),
+    edit_file: tool({
+      description:
+        "Apply a precise string replacement to an existing file. Use this for SMALL/TARGETED edits instead of rewriting the whole file. `find` must occur exactly once in the file — include enough surrounding context to be unique. For larger rewrites, use write_file instead.",
+      inputSchema: z.object({
+        path: z.string(),
+        find: z.string().min(1),
+        replace: z.string(),
+      }),
+      execute: async ({ path, find, replace }) => {
+        const { data: file, error: ferr } = await supabase
+          .from("files")
+          .select("id, content")
+          .eq("project_id", projectId)
+          .eq("path", path)
+          .eq("is_folder", false)
+          .maybeSingle();
+        if (ferr) return { ok: false, error: ferr.message };
+        if (!file) return { ok: false, error: "File not found" };
+        const idx = file.content.indexOf(find);
+        if (idx === -1) return { ok: false, error: "`find` string not found in file" };
+        if (file.content.indexOf(find, idx + find.length) !== -1)
+          return { ok: false, error: "`find` matches multiple times — add more surrounding context" };
+        const next = file.content.slice(0, idx) + replace + file.content.slice(idx + find.length);
+        const { error: uerr } = await supabase
+          .from("files")
+          .update({ content: next })
+          .eq("id", file.id);
+        if (uerr) return { ok: false, error: uerr.message };
+        return { ok: true, action: "updated", path };
       },
     }),
     list_files: tool({
@@ -195,10 +281,14 @@ You have direct access to the user's project files via tools — DO NOT just pri
 Available tools:
 - list_files: list everything in the project
 - read_file: read a file you don't have open yet
-- write_file: create a new file OR fully replace an existing one
-- delete_file: remove a file
-- rename_file: rename/move a file
-- grep: search for a pattern across all files in the project
+- write_file: create OR fully replace a file
+- edit_file: precise string find/replace inside an existing file (preferred for small/targeted edits)
+- create_folder: create an empty folder
+- delete_file: delete one file
+- delete_path: RECURSIVELY delete a file OR folder + everything inside it
+- rename_file: rename/move a single file
+- move_path: move/rename a file OR an entire folder (with all descendants)
+- grep: search for a pattern across all files
 
 Project file tree:
 ${allFilePaths.length ? allFilePaths.map((p) => `  - ${p}`).join("\n") : "  (empty)"}
@@ -207,11 +297,13 @@ Currently OPEN files (full source):
 ${fileContext}
 
 Operating rules:
-- When the user asks for a change, USE THE TOOLS to apply it directly. Do not output a "here's the code, paste it" answer for changes you can perform yourself.
+- When the user asks for a change, USE THE TOOLS to apply it directly. Do not print code for the user to paste.
+- Prefer edit_file for small/surgical changes. Use write_file only when the file is new or you are rewriting most of it.
 - Before editing a file you have not seen, call read_file first.
 - write_file replaces the WHOLE file — always include the complete final contents.
-- After tool calls, give a brief summary of what changed (file paths + 1-line per change). Keep prose short. The user can see the diff in their editor.
-- Only show code blocks when explaining or when the user explicitly asks to see code without applying it. Prefix code blocks with the file path as a comment on line 1.`;
+- For folders: use create_folder, delete_path (recursive), move_path.
+- After tool calls, give a brief summary (file paths + 1-line per change). Keep prose short.
+- Only show code blocks when the user explicitly asks to see code without applying it. Prefix such code blocks with the file path as a comment on line 1.`;
 
         const result = streamText({
           model,

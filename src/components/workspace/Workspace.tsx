@@ -85,6 +85,28 @@ export function Workspace({ projectId, threadId }: { projectId: string; threadId
     }, 600);
   };
 
+  // Live-update an open tab when the agent writes that path. Avoids editor flicker.
+  const applyAgentWrite = (path: string, content: string) => {
+    setTabs((prev) =>
+      prev.map((t) => (t.path === path ? { ...t, content, dirty: false } : t)),
+    );
+  };
+
+  // For tools that mutated a path without giving us the new content
+  // (edit_file, move_path), re-fetch by id so the open tab reflects truth.
+  const refreshOpenByPath = async (path: string) => {
+    const tab = tabs.find((t) => t.path === path);
+    if (!tab) return;
+    try {
+      const f = await getFileFn({ data: { id: tab.id } });
+      setTabs((prev) =>
+        prev.map((t) => (t.id === f.id ? { ...t, content: f.content, path: f.path, dirty: false } : t)),
+      );
+    } catch {
+      /* file may have been deleted */
+    }
+  };
+
   // After file create/delete/rename, refresh open tabs that may have changed.
   useEffect(() => {
     if (!filesQuery.data) return;
@@ -151,6 +173,8 @@ export function Workspace({ projectId, threadId }: { projectId: string; threadId
             }))}
             allFilePaths={allPaths}
             activeFilePath={activeTab?.path}
+            onAgentWrite={applyAgentWrite}
+            onAgentTouchPath={refreshOpenByPath}
           />
         </Panel>
       </PanelGroup>
