@@ -8,10 +8,11 @@ import {
   Folder,
   FolderOpen,
   Plus,
+  FolderPlus,
   Trash2,
   Pencil,
 } from "lucide-react";
-import { createFile, deleteFile, renameFile } from "@/lib/workspace.functions";
+import { createFile, deletePath, movePath } from "@/lib/workspace.functions";
 import { toast } from "sonner";
 
 type FileRow = {
