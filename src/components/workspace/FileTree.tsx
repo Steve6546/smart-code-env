@@ -147,28 +147,29 @@ export function FileTree({
                 <span className="truncate">{child.name}</span>
               </button>
             )}
-            {child.file && (
-              <div className="flex opacity-0 group-hover:opacity-100">
-                <button
-                  className="rounded p-0.5 hover:bg-background"
-                  onClick={() => {
-                    const np = prompt("Rename to", child.file!.path);
-                    if (np && np !== child.file!.path)
-                      renameMut.mutate({ id: child.file!.id, path: np });
-                  }}
-                >
-                  <Pencil className="h-3 w-3" />
-                </button>
-                <button
-                  className="rounded p-0.5 hover:bg-background hover:text-destructive"
-                  onClick={() => {
-                    if (confirm(`Delete ${child.path}?`)) delMut.mutate(child.file!.id);
-                  }}
-                >
-                  <Trash2 className="h-3 w-3" />
-                </button>
-              </div>
-            )}
+            <div className="flex opacity-0 group-hover:opacity-100">
+              <button
+                className="rounded p-0.5 hover:bg-background"
+                onClick={() => {
+                  const np = prompt("Rename / move to", child.path);
+                  if (np && np !== child.path)
+                    renameMut.mutate({ from: child.path, to: np });
+                }}
+              >
+                <Pencil className="h-3 w-3" />
+              </button>
+              <button
+                className="rounded p-0.5 hover:bg-background hover:text-destructive"
+                onClick={() => {
+                  const msg = isFolder
+                    ? `Delete folder "${child.path}" and EVERYTHING inside it?`
+                    : `Delete ${child.path}?`;
+                  if (confirm(msg)) delMut.mutate(child.path);
+                }}
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </div>
           </div>
           {isFolder && isOpen && renderNode(child, depth + 1)}
         </div>
