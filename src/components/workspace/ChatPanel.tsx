@@ -159,6 +159,7 @@ export function ChatPanel({
   allFilePaths,
   activeFilePath,
   onAgentWrite,
+  onAgentTouchPath,
 }: {
   projectId: string;
   threadId: string;
@@ -166,6 +167,7 @@ export function ChatPanel({
   allFilePaths: string[];
   activeFilePath?: string;
   onAgentWrite?: (path: string, content: string) => void;
+  onAgentTouchPath?: (path: string) => void;
 }) {
   const qc = useQueryClient();
   const listFn = useServerFn(listMessages);
