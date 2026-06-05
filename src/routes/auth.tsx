@@ -16,6 +16,12 @@ function AuthPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    // If we have an access_token in the hash, don't try to check user yet
+    // let the Supabase library process it.
+    if (typeof window !== 'undefined' && window.location.hash.includes('access_token=')) {
+      return;
+    }
+
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) navigate({ to: "/" });
     });
