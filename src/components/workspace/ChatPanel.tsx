@@ -228,13 +228,36 @@ export function ChatPanel({
     inputRef.current?.focus();
   }, [threadId, status]);
 
-  // Refetch files whenever the assistant likely mutated them (tool calls present).
-  const lastMsgFingerprint = messages
-    .map((m) => m.parts.filter((p) => p.type.startsWith("tool-")).length)
-    .join(",");
+  // React to completed file-mutating tool calls: refresh file tree + push
+  // new content into any open tab so the editor updates live without flicker.
+  const seenToolCallsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    qc.invalidateQueries({ queryKey: ["files", projectId] });
-  }, [lastMsgFingerprint, qc, projectId]);
+    let touched = false;
+    for (const m of messages) {
+      if (m.role !== "assistant") continue;
+      for (const p of m.parts as Array<{
+        type: string;
+        state?: string;
+        toolCallId?: string;
+        toolName?: string;
+        input?: { path?: string; from?: string; to?: string; content?: string };
+        output?: { ok?: boolean; action?: string };
+      }>) {
+        if (!p.type.startsWith("tool-")) continue;
+        if (p.state !== "output-available") continue;
+        const id = p.toolCallId ?? `${m.id}-${p.type}`;
+        if (seenToolCallsRef.current.has(id)) continue;
+        seenToolCallsRef.current.add(id);
+        if (!p.output?.ok) continue;
+        const tool = p.toolName ?? p.type.replace(/^tool-/, "");
+        touched = true;
+        if (tool === "write_file" && p.input?.path && typeof p.input.content === "string") {
+          onAgentWrite?.(p.input.path, p.input.content);
+        }
+      }
+    }
+    if (touched) qc.invalidateQueries({ queryKey: ["files", projectId] });
+  }, [messages, qc, projectId, onAgentWrite]);
 
   const isLoading = status === "submitted" || status === "streaming";
 
