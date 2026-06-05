@@ -65,27 +65,34 @@ export function FileTree({
   const tree = useMemo(() => buildTree(files), [files]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["src"]));
   const createFn = useServerFn(createFile);
-  const deleteFn = useServerFn(deleteFile);
-  const renameFn = useServerFn(renameFile);
+  const deletePathFn = useServerFn(deletePath);
+  const movePathFn = useServerFn(movePath);
 
   const createMut = useMutation({
-    mutationFn: (path: string) => createFn({ data: { projectId, path } }),
+    mutationFn: (v: { path: string; isFolder?: boolean }) =>
+      createFn({ data: { projectId, path: v.path, isFolder: v.isFolder } }),
     onSuccess: () => onChanged(),
     onError: (e: Error) => toast.error(e.message),
   });
   const delMut = useMutation({
-    mutationFn: (id: string) => deleteFn({ data: { id } }),
+    mutationFn: (path: string) => deletePathFn({ data: { projectId, path } }),
     onSuccess: () => onChanged(),
+    onError: (e: Error) => toast.error(e.message),
   });
   const renameMut = useMutation({
-    mutationFn: (v: { id: string; path: string }) => renameFn({ data: v }),
+    mutationFn: (v: { from: string; to: string }) =>
+      movePathFn({ data: { projectId, from: v.from, to: v.to } }),
     onSuccess: () => onChanged(),
     onError: (e: Error) => toast.error(e.message),
   });
 
   const newFile = () => {
     const path = prompt("New file path (e.g. src/utils.ts)");
-    if (path?.trim()) createMut.mutate(path.trim());
+    if (path?.trim()) createMut.mutate({ path: path.trim() });
+  };
+  const newFolder = () => {
+    const path = prompt("New folder path (e.g. src/components)");
+    if (path?.trim()) createMut.mutate({ path: path.trim(), isFolder: true });
   };
 
   const toggle = (p: string) => {
