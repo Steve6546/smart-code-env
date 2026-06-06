@@ -506,9 +506,8 @@ export function ChatPanel({
                     </button>
                   )}
                 </div>
-
-                </div>
                 {isEditing ? (
+
                   <div className="space-y-2">
                     <textarea
                       value={editingText}
