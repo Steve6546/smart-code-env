@@ -190,6 +190,11 @@ function makeTools(
         if (ferr) return { ok: false, error: ferr.message };
         for (const r of rows ?? []) {
           const np = r.path === f ? t : t + r.path.slice(f.length);
+          if (!r.is_folder) {
+            await snap(r.path, "move_from");
+            await snap(np, "move_to");
+          }
+
           await supabase
             .from("files")
             .update({ path: np, language: r.is_folder ? null : langFromPath(np) })
