@@ -75,6 +75,8 @@ function makeTools(
         content: z.string(),
       }),
       execute: async ({ path, content }) => {
+        await snap(path, "write_file");
+
         const { data: existing } = await supabase
           .from("files")
           .select("id")
