@@ -20,7 +20,36 @@ const langFromPath = (p: string): string => {
   );
 };
 
-function makeTools(supabase: SupabaseClient, userId: string, projectId: string) {
+type SnapshotRow = {
+  path: string;
+  prior_content: string | null;
+  prior_existed: boolean;
+  action: string;
+};
+
+function makeTools(
+  supabase: SupabaseClient,
+  userId: string,
+  projectId: string,
+  threadId: string,
+  snapshots: SnapshotRow[],
+) {
+  const snap = async (path: string, action: string) => {
+    const { data: existing } = await supabase
+      .from("files")
+      .select("content")
+      .eq("project_id", projectId)
+      .eq("path", path)
+      .eq("is_folder", false)
+      .maybeSingle();
+    snapshots.push({
+      path,
+      prior_content: existing?.content ?? null,
+      prior_existed: !!existing,
+      action,
+    });
+  };
+
   return {
     read_file: tool({
       description: "Read the full contents of a file in the current project by path.",
