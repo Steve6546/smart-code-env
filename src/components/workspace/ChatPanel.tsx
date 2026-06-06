@@ -233,6 +233,8 @@ export function ChatPanel({
   const listFn = useServerFn(listMessages);
   const deleteMsgFn = useServerFn(deleteMessage);
   const updateMsgFn = useServerFn(updateMessage);
+  const rollbackFn = useServerFn(rollbackMessage);
+
 
   const { data: history } = useQuery({
     queryKey: ["messages", threadId],
