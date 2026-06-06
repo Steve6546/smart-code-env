@@ -384,14 +384,17 @@ ${fileContext}
 
 # Output rules
 - Keep prose short. Show your plan, then act, then summarize.
+- ALWAYS reply in the SAME language the user wrote in. If the user writes in Arabic, reply in concise Arabic. English → concise English.
 - Only show code blocks when the user explicitly asks to SEE code instead of applying it. Prefix such blocks with the file path as a comment on line 1.
-- If the user gives an instruction that is destructive, confirm it inline before running delete_path on a folder with many files.`;
+- If the user gives an instruction that is destructive, confirm it inline before running delete_path on a folder with many files.
+- NEVER auto-delete files. For any delete, restate exactly what will be removed and wait for explicit user "yes" before calling delete_file or delete_path.`;
 
+        const snapshots: SnapshotRow[] = [];
         const result = streamText({
           model,
           system,
           messages: await convertToModelMessages(messages),
-          tools: makeTools(supabase, userId, projectId),
+          tools: makeTools(supabase, userId, projectId, threadId, snapshots),
           stopWhen: stepCountIs(50),
         });
 
@@ -399,19 +402,64 @@ ${fileContext}
           originalMessages: messages,
           onFinish: async ({ responseMessage }) => {
             try {
-              await supabase.from("chat_messages").insert({
-                thread_id: threadId,
-                user_id: userId,
-                role: "assistant",
-                parts: responseMessage.parts as never,
-              });
+              const { data: inserted } = await supabase
+                .from("chat_messages")
+                .insert({
+                  thread_id: threadId,
+                  user_id: userId,
+                  role: "assistant",
+                  parts: responseMessage.parts as never,
+                })
+                .select("id")
+                .single();
+              const assistantId = inserted?.id ?? null;
+
               await supabase
                 .from("chat_threads")
                 .update({ updated_at: new Date().toISOString() })
                 .eq("id", threadId);
 
-              // Snapshot what the agent did into project memory so future
-              // sessions can resume context.
+              // Persist file snapshots taken during this turn so the user can
+              // roll back the entire exchange.
+              if (snapshots.length && assistantId) {
+                await supabase.from("file_snapshots").insert(
+                  snapshots.map((s) => ({
+                    project_id: projectId,
+                    user_id: userId,
+                    thread_id: threadId,
+                    message_id: assistantId,
+                    path: s.path,
+                    prior_content: s.prior_content,
+                    prior_existed: s.prior_existed,
+                    action: s.action,
+                  })),
+                );
+                // Trim to last 10 snapshot batches per thread
+                const { data: msgs } = await supabase
+                  .from("file_snapshots")
+                  .select("message_id, created_at")
+                  .eq("thread_id", threadId)
+                  .order("created_at", { ascending: false });
+                const seen = new Set<string>();
+                const keep = new Set<string>();
+                for (const r of msgs ?? []) {
+                  const id = r.message_id as string | null;
+                  if (!id || seen.has(id)) continue;
+                  seen.add(id);
+                  if (keep.size < 10) keep.add(id);
+                }
+                const drop = (msgs ?? [])
+                  .map((r) => r.message_id as string | null)
+                  .filter((id): id is string => !!id && !keep.has(id));
+                if (drop.length) {
+                  await supabase
+                    .from("file_snapshots")
+                    .delete()
+                    .eq("thread_id", threadId)
+                    .in("message_id", drop);
+                }
+              }
+
               const touched: string[] = [];
               for (const p of responseMessage.parts as Array<{
                 type: string;
@@ -438,6 +486,7 @@ ${fileContext}
               console.error("persist assistant failed", e);
             }
           },
+
         });
       },
     },
