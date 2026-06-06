@@ -107,6 +107,8 @@ function makeTools(
       description: "Delete a single file from the current project by path.",
       inputSchema: z.object({ path: z.string() }),
       execute: async ({ path }) => {
+        await snap(path, "delete_file");
+
         const { error } = await supabase
           .from("files")
           .delete()
