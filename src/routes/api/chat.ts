@@ -212,6 +212,8 @@ function makeTools(
         replace: z.string(),
       }),
       execute: async ({ path, find, replace }) => {
+        await snap(path, "edit_file");
+
         const { data: file, error: ferr } = await supabase
           .from("files")
           .select("id, content")
