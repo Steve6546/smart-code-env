@@ -163,6 +163,9 @@ function makeTools(
       description: "Rename or move a single file to a new path.",
       inputSchema: z.object({ from: z.string(), to: z.string() }),
       execute: async ({ from, to }) => {
+        await snap(from, "rename_from");
+        await snap(to, "rename_to");
+
         const { error } = await supabase
           .from("files")
           .update({ path: to, language: langFromPath(to) })
