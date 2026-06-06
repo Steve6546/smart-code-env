@@ -573,7 +573,8 @@ export function ChatPanel({
                   </div>
                 )}
               </div>
-            </div>
+            </motion.div>
+
           );
         })}
         {showThinking && (
