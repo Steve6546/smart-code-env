@@ -50,7 +50,8 @@ function makeTools(
     });
   };
 
-  return {
+  const tools = {
+
     read_file: tool({
       description: "Read the full contents of a file in the current project by path.",
       inputSchema: z.object({ path: z.string() }),
