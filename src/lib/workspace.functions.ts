@@ -300,3 +300,84 @@ export const listMessages = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return m ?? [];
   });
+
+// Rollback every file snapshot recorded for a given assistant message.
+// Restores prior content or deletes files that didn't exist before.
+export const rollbackMessage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ projectId: z.string().uuid(), messageId: z.string().min(1) }).parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    const { data: snaps, error } = await context.supabase
+      .from("file_snapshots")
+      .select("id, path, prior_content, prior_existed")
+      .eq("project_id", data.projectId)
+      .eq("message_id", data.messageId)
+      .order("created_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    let restored = 0;
+    for (const s of snaps ?? []) {
+      if (!s.prior_existed) {
+        await context.supabase
+          .from("files")
+          .delete()
+          .eq("project_id", data.projectId)
+          .eq("path", s.path);
+      } else {
+        const { data: existing } = await context.supabase
+          .from("files")
+          .select("id")
+          .eq("project_id", data.projectId)
+          .eq("path", s.path)
+          .maybeSingle();
+        if (existing) {
+          await context.supabase
+            .from("files")
+            .update({ content: s.prior_content ?? "" })
+            .eq("id", existing.id);
+        } else {
+          await context.supabase.from("files").insert({
+            project_id: data.projectId,
+            user_id: context.userId,
+            path: s.path,
+            content: s.prior_content ?? "",
+            language: langFromPath(s.path),
+            is_folder: false,
+          });
+        }
+      }
+      restored++;
+    }
+    await context.supabase
+      .from("file_snapshots")
+      .delete()
+      .eq("project_id", data.projectId)
+      .eq("message_id", data.messageId);
+    return { ok: true, restored };
+  });
+
+export const countSnapshotsForMessages = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({ projectId: z.string().uuid(), messageIds: z.array(z.string().min(1)) })
+      .parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    if (data.messageIds.length === 0) return {};
+    const { data: rows, error } = await context.supabase
+      .from("file_snapshots")
+      .select("message_id")
+      .eq("project_id", data.projectId)
+      .in("message_id", data.messageIds);
+    if (error) throw new Error(error.message);
+    const counts: Record<string, number> = {};
+    for (const r of rows ?? []) {
+      const id = r.message_id as string | null;
+      if (!id) continue;
+      counts[id] = (counts[id] ?? 0) + 1;
+    }
+    return counts;
+  });
+
