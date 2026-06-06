@@ -20,8 +20,38 @@ const langFromPath = (p: string): string => {
   );
 };
 
-function makeTools(supabase: SupabaseClient, userId: string, projectId: string) {
-  return {
+type SnapshotRow = {
+  path: string;
+  prior_content: string | null;
+  prior_existed: boolean;
+  action: string;
+};
+
+function makeTools(
+  supabase: SupabaseClient,
+  userId: string,
+  projectId: string,
+  threadId: string,
+  snapshots: SnapshotRow[],
+) {
+  const snap = async (path: string, action: string) => {
+    const { data: existing } = await supabase
+      .from("files")
+      .select("content")
+      .eq("project_id", projectId)
+      .eq("path", path)
+      .eq("is_folder", false)
+      .maybeSingle();
+    snapshots.push({
+      path,
+      prior_content: existing?.content ?? null,
+      prior_existed: !!existing,
+      action,
+    });
+  };
+
+  const tools = {
+
     read_file: tool({
       description: "Read the full contents of a file in the current project by path.",
       inputSchema: z.object({ path: z.string() }),
@@ -46,6 +76,8 @@ function makeTools(supabase: SupabaseClient, userId: string, projectId: string) 
         content: z.string(),
       }),
       execute: async ({ path, content }) => {
+        await snap(path, "write_file");
+
         const { data: existing } = await supabase
           .from("files")
           .select("id")
@@ -76,6 +108,8 @@ function makeTools(supabase: SupabaseClient, userId: string, projectId: string) 
       description: "Delete a single file from the current project by path.",
       inputSchema: z.object({ path: z.string() }),
       execute: async ({ path }) => {
+        await snap(path, "delete_file");
+
         const { error } = await supabase
           .from("files")
           .delete()
@@ -91,6 +125,15 @@ function makeTools(supabase: SupabaseClient, userId: string, projectId: string) 
       inputSchema: z.object({ path: z.string() }),
       execute: async ({ path }) => {
         const prefix = path.replace(/\/+$/, "");
+        const { data: affected } = await supabase
+          .from("files")
+          .select("path, is_folder")
+          .eq("project_id", projectId)
+          .or(`path.eq.${prefix},path.like.${prefix}/%`);
+        for (const a of affected ?? []) {
+          if (!a.is_folder) await snap(a.path, "delete_path");
+        }
+
         const { error } = await supabase
           .from("files")
           .delete()
@@ -121,6 +164,9 @@ function makeTools(supabase: SupabaseClient, userId: string, projectId: string) 
       description: "Rename or move a single file to a new path.",
       inputSchema: z.object({ from: z.string(), to: z.string() }),
       execute: async ({ from, to }) => {
+        await snap(from, "rename_from");
+        await snap(to, "rename_to");
+
         const { error } = await supabase
           .from("files")
           .update({ path: to, language: langFromPath(to) })
@@ -145,6 +191,11 @@ function makeTools(supabase: SupabaseClient, userId: string, projectId: string) 
         if (ferr) return { ok: false, error: ferr.message };
         for (const r of rows ?? []) {
           const np = r.path === f ? t : t + r.path.slice(f.length);
+          if (!r.is_folder) {
+            await snap(r.path, "move_from");
+            await snap(np, "move_to");
+          }
+
           await supabase
             .from("files")
             .update({ path: np, language: r.is_folder ? null : langFromPath(np) })
@@ -162,6 +213,8 @@ function makeTools(supabase: SupabaseClient, userId: string, projectId: string) 
         replace: z.string(),
       }),
       execute: async ({ path, find, replace }) => {
+        await snap(path, "edit_file");
+
         const { data: file, error: ferr } = await supabase
           .from("files")
           .select("id, content")
@@ -220,7 +273,15 @@ function makeTools(supabase: SupabaseClient, userId: string, projectId: string) 
       },
     }),
   };
+  // Aliases so the agent can use either name.
+  return {
+    ...tools,
+    patch_file: tools.edit_file,
+    create_file: tools.write_file,
+    search_project: tools.grep,
+  };
 }
+
 
 export const Route = createFileRoute("/api/chat")({
   server: {
@@ -303,14 +364,17 @@ You have direct access to the user's project files via tools — DO NOT just pri
 # Tools (skills) — call these EXACT names
 - list_files: list everything in the project
 - read_file: read a file's full contents
-- write_file: create OR fully replace a file (use only for new files or full rewrites)
-- edit_file: SURGICAL find/replace inside an existing file — STRONGLY PREFERRED for any change in a file that already has content (think of it as patch_file)
+- write_file (alias: create_file): create OR fully replace a file. Use only for new files or full rewrites.
+- edit_file (alias: patch_file): SURGICAL find/replace inside an existing file — STRONGLY PREFERRED for any change in a file that already has content. Patch, don't rewrite.
 - create_folder: create an empty folder
-- delete_file: delete one file (never as a step toward editing)
-- delete_path: RECURSIVELY delete a file OR folder + everything inside it
+- delete_file: delete ONE file. NEVER call without explicit user confirmation.
+- delete_path: RECURSIVELY delete a file OR folder + everything inside. NEVER call without explicit user confirmation.
 - rename_file: rename or move a single file
 - move_path: move/rename a file OR an entire folder (with descendants)
-- grep: search for a pattern across all files
+- grep (alias: search_project): search for a pattern across all files
+
+Every destructive write (write_file, edit_file, delete_*, rename_file, move_path) is auto-snapshotted so the user can roll back from chat.
+
 
 # Project memory (durable, across chat sessions)
 ${memoryBlock}
@@ -323,14 +387,17 @@ ${fileContext}
 
 # Output rules
 - Keep prose short. Show your plan, then act, then summarize.
+- ALWAYS reply in the SAME language the user wrote in. If the user writes in Arabic, reply in concise Arabic. English → concise English.
 - Only show code blocks when the user explicitly asks to SEE code instead of applying it. Prefix such blocks with the file path as a comment on line 1.
-- If the user gives an instruction that is destructive, confirm it inline before running delete_path on a folder with many files.`;
+- If the user gives an instruction that is destructive, confirm it inline before running delete_path on a folder with many files.
+- NEVER auto-delete files. For any delete, restate exactly what will be removed and wait for explicit user "yes" before calling delete_file or delete_path.`;
 
+        const snapshots: SnapshotRow[] = [];
         const result = streamText({
           model,
           system,
           messages: await convertToModelMessages(messages),
-          tools: makeTools(supabase, userId, projectId),
+          tools: makeTools(supabase, userId, projectId, threadId, snapshots),
           stopWhen: stepCountIs(50),
         });
 
@@ -338,19 +405,64 @@ ${fileContext}
           originalMessages: messages,
           onFinish: async ({ responseMessage }) => {
             try {
-              await supabase.from("chat_messages").insert({
-                thread_id: threadId,
-                user_id: userId,
-                role: "assistant",
-                parts: responseMessage.parts as never,
-              });
+              const { data: inserted } = await supabase
+                .from("chat_messages")
+                .insert({
+                  thread_id: threadId,
+                  user_id: userId,
+                  role: "assistant",
+                  parts: responseMessage.parts as never,
+                })
+                .select("id")
+                .single();
+              const assistantId = inserted?.id ?? null;
+
               await supabase
                 .from("chat_threads")
                 .update({ updated_at: new Date().toISOString() })
                 .eq("id", threadId);
 
-              // Snapshot what the agent did into project memory so future
-              // sessions can resume context.
+              // Persist file snapshots taken during this turn so the user can
+              // roll back the entire exchange.
+              if (snapshots.length && assistantId) {
+                await supabase.from("file_snapshots").insert(
+                  snapshots.map((s) => ({
+                    project_id: projectId,
+                    user_id: userId,
+                    thread_id: threadId,
+                    message_id: assistantId,
+                    path: s.path,
+                    prior_content: s.prior_content,
+                    prior_existed: s.prior_existed,
+                    action: s.action,
+                  })),
+                );
+                // Trim to last 10 snapshot batches per thread
+                const { data: msgs } = await supabase
+                  .from("file_snapshots")
+                  .select("message_id, created_at")
+                  .eq("thread_id", threadId)
+                  .order("created_at", { ascending: false });
+                const seen = new Set<string>();
+                const keep = new Set<string>();
+                for (const r of msgs ?? []) {
+                  const id = r.message_id as string | null;
+                  if (!id || seen.has(id)) continue;
+                  seen.add(id);
+                  if (keep.size < 10) keep.add(id);
+                }
+                const drop = (msgs ?? [])
+                  .map((r) => r.message_id as string | null)
+                  .filter((id): id is string => !!id && !keep.has(id));
+                if (drop.length) {
+                  await supabase
+                    .from("file_snapshots")
+                    .delete()
+                    .eq("thread_id", threadId)
+                    .in("message_id", drop);
+                }
+              }
+
               const touched: string[] = [];
               for (const p of responseMessage.parts as Array<{
                 type: string;
@@ -377,6 +489,7 @@ ${fileContext}
               console.error("persist assistant failed", e);
             }
           },
+
         });
       },
     },

@@ -30,7 +30,10 @@ import {
   listFiles,
   deleteMessage,
   updateMessage,
+  rollbackMessage,
 } from "@/lib/workspace.functions";
+import { motion, AnimatePresence } from "framer-motion";
+
 
 type OpenFile = { path: string; language: string | null; content: string };
 
@@ -230,6 +233,8 @@ export function ChatPanel({
   const listFn = useServerFn(listMessages);
   const deleteMsgFn = useServerFn(deleteMessage);
   const updateMsgFn = useServerFn(updateMessage);
+  const rollbackFn = useServerFn(rollbackMessage);
+
 
   const { data: history } = useQuery({
     queryKey: ["messages", threadId],
@@ -384,6 +389,32 @@ export function ChatPanel({
     setEditingText("");
   };
 
+  const rollbackOne = async (messageId: string) => {
+    if (!confirm("Roll back the file changes from this reply?")) return;
+    try {
+      const res = await rollbackFn({ data: { projectId, messageId } });
+      qc.invalidateQueries({ queryKey: ["files", projectId] });
+      if (res.restored === 0) {
+        alert("No file changes were recorded for this reply.");
+      } else {
+        // Force any open tabs to reload from disk
+        for (const m of messages) {
+          if (m.id !== messageId) continue;
+          for (const p of m.parts as Array<{ type: string; input?: { path?: string; from?: string; to?: string } }>) {
+            if (!p.type.startsWith("tool-")) continue;
+            if (p.input?.path) onAgentTouchPath?.(p.input.path);
+            if (p.input?.from) onAgentTouchPath?.(p.input.from);
+            if (p.input?.to) onAgentTouchPath?.(p.input.to);
+          }
+        }
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Rollback failed.");
+    }
+  };
+
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex items-center gap-2 border-b border-border px-3 py-2">
@@ -432,7 +463,13 @@ export function ChatPanel({
             .join("");
           const isEditing = editingId === m.id;
           return (
-            <div key={m.id} className="flex gap-2.5">
+            <motion.div
+              key={m.id}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.18 }}
+              className="group flex gap-2.5"
+            >
               <div
                 className={`mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full ${
                   isUser ? "bg-primary/20 text-primary" : "bg-emerald-500/15 text-emerald-400"
@@ -452,14 +489,25 @@ export function ChatPanel({
                         setEditingId(m.id);
                         setEditingText(textOfMsg);
                       }}
-                      className="ml-auto opacity-0 group-hover:opacity-100 hover:text-foreground"
+                      className="ml-auto opacity-0 transition group-hover:opacity-100 hover:text-foreground"
                       title="Edit message"
                     >
                       <Pencil className="h-3 w-3" />
                     </button>
                   )}
+                  {!isUser && timestamps.has(m.id) && (
+                    <button
+                      onClick={() => rollbackOne(m.id)}
+                      className="ml-auto opacity-0 transition group-hover:opacity-100 hover:text-foreground flex items-center gap-1"
+                      title="Roll back file changes from this reply"
+                    >
+                      <Undo2 className="h-3 w-3" />
+                      <span>Undo</span>
+                    </button>
+                  )}
                 </div>
                 {isEditing ? (
+
                   <div className="space-y-2">
                     <textarea
                       value={editingText}
@@ -524,7 +572,8 @@ export function ChatPanel({
                   </div>
                 )}
               </div>
-            </div>
+            </motion.div>
+
           );
         })}
         {showThinking && (

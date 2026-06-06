@@ -84,6 +84,45 @@ export type Database = {
           },
         ]
       }
+      file_snapshots: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          message_id: string | null
+          path: string
+          prior_content: string | null
+          prior_existed: boolean
+          project_id: string
+          thread_id: string | null
+          user_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          message_id?: string | null
+          path: string
+          prior_content?: string | null
+          prior_existed?: boolean
+          project_id: string
+          thread_id?: string | null
+          user_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          message_id?: string | null
+          path?: string
+          prior_content?: string | null
+          prior_existed?: boolean
+          project_id?: string
+          thread_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       files: {
         Row: {
           content: string
