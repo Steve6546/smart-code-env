@@ -30,7 +30,10 @@ import {
   listFiles,
   deleteMessage,
   updateMessage,
+  rollbackMessage,
 } from "@/lib/workspace.functions";
+import { motion, AnimatePresence } from "framer-motion";
+
 
 type OpenFile = { path: string; language: string | null; content: string };
 
