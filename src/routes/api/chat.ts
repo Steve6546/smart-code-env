@@ -124,6 +124,15 @@ function makeTools(
       inputSchema: z.object({ path: z.string() }),
       execute: async ({ path }) => {
         const prefix = path.replace(/\/+$/, "");
+        const { data: affected } = await supabase
+          .from("files")
+          .select("path, is_folder")
+          .eq("project_id", projectId)
+          .or(`path.eq.${prefix},path.like.${prefix}/%`);
+        for (const a of affected ?? []) {
+          if (!a.is_folder) await snap(a.path, "delete_path");
+        }
+
         const { error } = await supabase
           .from("files")
           .delete()
