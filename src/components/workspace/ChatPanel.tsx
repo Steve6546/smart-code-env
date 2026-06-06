@@ -389,6 +389,32 @@ export function ChatPanel({
     setEditingText("");
   };
 
+  const rollbackOne = async (messageId: string) => {
+    if (!confirm("Roll back the file changes from this reply?")) return;
+    try {
+      const res = await rollbackFn({ data: { projectId, messageId } });
+      qc.invalidateQueries({ queryKey: ["files", projectId] });
+      if (res.restored === 0) {
+        alert("No file changes were recorded for this reply.");
+      } else {
+        // Force any open tabs to reload from disk
+        for (const m of messages) {
+          if (m.id !== messageId) continue;
+          for (const p of m.parts as Array<{ type: string; input?: { path?: string; from?: string; to?: string } }>) {
+            if (!p.type.startsWith("tool-")) continue;
+            if (p.input?.path) onAgentTouchPath?.(p.input.path);
+            if (p.input?.from) onAgentTouchPath?.(p.input.from);
+            if (p.input?.to) onAgentTouchPath?.(p.input.to);
+          }
+        }
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Rollback failed.");
+    }
+  };
+
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex items-center gap-2 border-b border-border px-3 py-2">
