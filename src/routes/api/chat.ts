@@ -273,7 +273,15 @@ function makeTools(
       },
     }),
   };
+  // Aliases so the agent can use either name.
+  return {
+    ...tools,
+    patch_file: tools.edit_file,
+    create_file: tools.write_file,
+    search_project: tools.grep,
+  };
 }
+
 
 export const Route = createFileRoute("/api/chat")({
   server: {
