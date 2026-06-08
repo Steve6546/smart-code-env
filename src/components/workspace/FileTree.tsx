@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation } from "@tanstack/react-query";
 import {
@@ -9,11 +9,27 @@ import {
   FolderOpen,
   Plus,
   FolderPlus,
-  Trash2,
-  Pencil,
+  MoreVertical,
 } from "lucide-react";
 import { createFile, deletePath, movePath } from "@/lib/workspace.functions";
 import { toast } from "sonner";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type FileRow = {
   id: string;
@@ -49,6 +65,32 @@ function buildTree(files: FileRow[]): Node {
   return root;
 }
 
+const LANG_COLORS: Record<string, string> = {
+  py: "text-yellow-400",
+  js: "text-yellow-300",
+  jsx: "text-yellow-300",
+  ts: "text-sky-400",
+  tsx: "text-sky-400",
+  html: "text-orange-400",
+  css: "text-blue-400",
+  scss: "text-pink-400",
+  json: "text-amber-300",
+  md: "text-zinc-300",
+  yml: "text-purple-300",
+  yaml: "text-purple-300",
+  sh: "text-emerald-400",
+};
+function fileIconColor(name: string) {
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  return LANG_COLORS[ext] ?? "text-muted-foreground";
+}
+
+function countDescendants(node: Node): number {
+  let n = node.file ? 1 : 0;
+  for (const c of node.children.values()) n += countDescendants(c);
+  return n;
+}
+
 export function FileTree({
   projectId,
   files,
@@ -64,9 +106,24 @@ export function FileTree({
 }) {
   const tree = useMemo(() => buildTree(files), [files]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["src"]));
+  const [pendingDelete, setPendingDelete] = useState<{ path: string; isFolder: boolean; count: number } | null>(null);
+
   const createFn = useServerFn(createFile);
   const deletePathFn = useServerFn(deletePath);
   const movePathFn = useServerFn(movePath);
+
+  // Auto-expand ancestors of active file
+  useEffect(() => {
+    if (!activeFileId) return;
+    const active = files.find((f) => f.id === activeFileId);
+    if (!active) return;
+    const parts = active.path.split("/").filter(Boolean);
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      for (let i = 1; i < parts.length; i++) next.add(parts.slice(0, i).join("/"));
+      return next;
+    });
+  }, [activeFileId, files]);
 
   const createMut = useMutation({
     mutationFn: (v: { path: string; isFolder?: boolean }) =>
@@ -76,7 +133,10 @@ export function FileTree({
   });
   const delMut = useMutation({
     mutationFn: (path: string) => deletePathFn({ data: { projectId, path } }),
-    onSuccess: () => onChanged(),
+    onSuccess: () => {
+      setPendingDelete(null);
+      onChanged();
+    },
     onError: (e: Error) => toast.error(e.message),
   });
   const renameMut = useMutation({
@@ -86,23 +146,24 @@ export function FileTree({
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const newFile = () => {
-    const path = prompt("New file path (e.g. src/utils.ts)");
+  const newFileAt = (parent: string) => {
+    const suggestion = parent ? `${parent}/newfile.ts` : "newfile.ts";
+    const path = prompt("New file path", suggestion);
     if (path?.trim()) createMut.mutate({ path: path.trim() });
   };
-  const newFolder = () => {
-    const path = prompt("New folder path (e.g. src/components)");
+  const newFolderAt = (parent: string) => {
+    const suggestion = parent ? `${parent}/new-folder` : "new-folder";
+    const path = prompt("New folder path", suggestion);
     if (path?.trim()) createMut.mutate({ path: path.trim(), isFolder: true });
   };
 
-  const toggle = (p: string) => {
+  const toggle = (p: string) =>
     setExpanded((prev) => {
       const next = new Set(prev);
       if (next.has(p)) next.delete(p);
       else next.add(p);
       return next;
     });
-  };
 
   const renderNode = (node: Node, depth: number): React.ReactNode => {
     const entries = Array.from(node.children.values()).sort((a, b) => {
@@ -115,6 +176,8 @@ export function FileTree({
       const isFolder = child.children.size > 0 || child.file?.is_folder;
       const isOpen = expanded.has(child.path);
       const isActive = child.file?.id === activeFileId;
+      const descendantCount = isFolder ? countDescendants(child) : 1;
+
       return (
         <div key={child.path}>
           <div
@@ -143,33 +206,56 @@ export function FileTree({
                 className="flex items-center gap-1 flex-1 min-w-0"
               >
                 <span className="w-3" />
-                <FileIcon className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                <FileIcon className={`h-3.5 w-3.5 flex-shrink-0 ${fileIconColor(child.name)}`} />
                 <span className="truncate">{child.name}</span>
               </button>
             )}
-            <div className="flex opacity-0 group-hover:opacity-100">
-              <button
-                className="rounded p-0.5 hover:bg-background"
-                onClick={() => {
-                  const np = prompt("Rename / move to", child.path);
-                  if (np && np !== child.path)
-                    renameMut.mutate({ from: child.path, to: np });
-                }}
-              >
-                <Pencil className="h-3 w-3" />
-              </button>
-              <button
-                className="rounded p-0.5 hover:bg-background hover:text-destructive"
-                onClick={() => {
-                  const msg = isFolder
-                    ? `Delete folder "${child.path}" and EVERYTHING inside it?`
-                    : `Delete ${child.path}?`;
-                  if (confirm(msg)) delMut.mutate(child.path);
-                }}
-              >
-                <Trash2 className="h-3 w-3" />
-              </button>
-            </div>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="rounded p-0.5 opacity-0 group-hover:opacity-100 hover:bg-background"
+                  onClick={(e) => e.stopPropagation()}
+                  title="More"
+                >
+                  <MoreVertical className="h-3 w-3" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                {isFolder && (
+                  <>
+                    <DropdownMenuItem onClick={() => newFileAt(child.path)}>🆕 New File</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => newFolderAt(child.path)}>📁 New Folder</DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
+                <DropdownMenuItem
+                  onClick={() => {
+                    const np = prompt("Rename to", child.path);
+                    if (np && np !== child.path) renameMut.mutate({ from: child.path, to: np });
+                  }}
+                >
+                  ✏️ Rename
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    const np = prompt("Move to (new path)", child.path);
+                    if (np && np !== child.path) renameMut.mutate({ from: child.path, to: np });
+                  }}
+                >
+                  📦 Move
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={() =>
+                    setPendingDelete({ path: child.path, isFolder: !!isFolder, count: descendantCount })
+                  }
+                >
+                  🗑️ Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           {isFolder && isOpen && renderNode(child, depth + 1)}
         </div>
@@ -185,14 +271,14 @@ export function FileTree({
         </span>
         <div className="flex items-center gap-0.5">
           <button
-            onClick={newFolder}
+            onClick={() => newFolderAt("")}
             className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
             title="New folder"
           >
             <FolderPlus className="h-3.5 w-3.5" />
           </button>
           <button
-            onClick={newFile}
+            onClick={() => newFileAt("")}
             className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
             title="New file"
           >
@@ -201,6 +287,30 @@ export function FileTree({
         </div>
       </div>
       <div className="flex-1 overflow-auto py-1">{renderNode(tree, 0)}</div>
+
+      <AlertDialog open={!!pendingDelete} onOpenChange={(o) => !o && setPendingDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete {pendingDelete?.isFolder ? "folder" : "file"} "{pendingDelete?.path}"?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDelete?.isFolder
+                ? `This will permanently delete ${pendingDelete.count} item${pendingDelete.count === 1 ? "" : "s"} inside this folder. This cannot be undone from the file tree.`
+                : "This file will be permanently deleted."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => pendingDelete && delMut.mutate(pendingDelete.path)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
