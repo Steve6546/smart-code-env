@@ -714,3 +714,109 @@ function ChatComposer({
     </div>
   );
 }
+
+function ThinkingBox({
+  lastMessage,
+  status,
+}: {
+  lastMessage: UIMessage | undefined;
+  status: string;
+}) {
+  const [elapsed, setElapsed] = useState(0);
+  const startRef = useRef(Date.now());
+  useEffect(() => {
+    startRef.current = Date.now();
+    const id = setInterval(() => setElapsed(Math.floor((Date.now() - startRef.current) / 1000)), 250);
+    return () => clearInterval(id);
+  }, []);
+
+  const steps = useMemo(() => {
+    const out: { id: string; icon: string; label: string; done: boolean }[] = [
+      { id: "init", icon: "🧠", label: "Analyzing your request", done: true },
+    ];
+    if (!lastMessage || lastMessage.role !== "assistant") return out;
+    const parts = lastMessage.parts as Array<{
+      type: string;
+      state?: string;
+      toolName?: string;
+      input?: { path?: string; from?: string; to?: string; pattern?: string };
+    }>;
+    const verbs: Record<string, { icon: string; label: (i: { path?: string; from?: string; to?: string; pattern?: string }) => string }> = {
+      read_file: { icon: "📖", label: (i) => `Reading: ${i.path ?? ""}` },
+      write_file: { icon: "📝", label: (i) => `Writing: ${i.path ?? ""}` },
+      edit_file: { icon: "✏️", label: (i) => `Patching: ${i.path ?? ""}` },
+      patch_file: { icon: "✏️", label: (i) => `Patching: ${i.path ?? ""}` },
+      delete_file: { icon: "🗑️", label: (i) => `Deleting: ${i.path ?? ""}` },
+      delete_path: { icon: "🗑️", label: (i) => `Deleting: ${i.path ?? ""}` },
+      rename_file: { icon: "🔀", label: (i) => `Renaming: ${i.from} → ${i.to}` },
+      move_path: { icon: "📦", label: (i) => `Moving: ${i.from} → ${i.to}` },
+      create_folder: { icon: "📁", label: (i) => `Creating folder: ${i.path ?? ""}` },
+      grep: { icon: "🔍", label: (i) => `Searching: ${i.pattern ?? ""}` },
+      search_project: { icon: "🔍", label: (i) => `Searching: ${i.pattern ?? ""}` },
+      list_files: { icon: "📂", label: () => `Listing project files` },
+    };
+    parts.forEach((p, idx) => {
+      if (!p.type.startsWith("tool-")) return;
+      const name = p.toolName ?? p.type.replace(/^tool-/, "");
+      const meta = verbs[name] ?? { icon: "⚙️", label: () => name };
+      out.push({
+        id: `${idx}-${name}`,
+        icon: meta.icon,
+        label: meta.label(p.input ?? {}),
+        done: p.state === "output-available",
+      });
+    });
+    return out;
+  }, [lastMessage]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="flex gap-2.5"
+    >
+      <div className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      </div>
+      <div className="flex-1 min-w-0 rounded-lg border border-border bg-card/60 overflow-hidden">
+        <div className="flex items-center gap-2 border-b border-border px-3 py-1.5 text-[12px] font-medium">
+          <span>⚙️</span>
+          <span>Agent working…</span>
+          <span className="ml-auto font-mono text-[10px] text-muted-foreground">{elapsed}s</span>
+        </div>
+        <ul className="px-3 py-2 space-y-1.5">
+          <AnimatePresence initial={false}>
+            {steps.map((s) => (
+              <motion.li
+                key={s.id}
+                initial={{ opacity: 0, x: -6 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.18 }}
+                className="flex items-center gap-2 text-[12px] font-mono"
+              >
+                <span className="text-base leading-none">{s.icon}</span>
+                <span className="truncate flex-1">{s.label}</span>
+                {s.done ? (
+                  <CheckCircle2 className="h-3 w-3 flex-shrink-0 text-emerald-500" />
+                ) : (
+                  <Loader2 className="h-3 w-3 flex-shrink-0 animate-spin text-primary" />
+                )}
+              </motion.li>
+            ))}
+          </AnimatePresence>
+          {status === "streaming" && (
+            <motion.li
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex items-center gap-2 text-[12px] text-muted-foreground"
+            >
+              <span className="text-base leading-none">💬</span>
+              <span>Writing response…</span>
+            </motion.li>
+          )}
+        </ul>
+      </div>
+    </motion.div>
+  );
+}
