@@ -339,7 +339,7 @@ export function ChatPanel({
 
   const isLoading = status === "submitted" || status === "streaming";
   const lastMsg = messages[messages.length - 1];
-  const showThinking = isLoading && (!lastMsg || lastMsg.role === "user" || !lastMsg.parts?.length);
+  const showThinking = isLoading;
 
   const submit = async () => {
     const text = input.trim();
