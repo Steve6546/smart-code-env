@@ -589,30 +589,137 @@ export function ChatPanel({
         )}
       </div>
 
-      <div className="border-t border-border p-2 sm:p-3">
-        <div className="relative rounded-md border border-border bg-background focus-within:border-primary">
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                submit();
-              }
-            }}
-            placeholder="Tell the agent what to build, refactor, or fix…"
-            rows={2}
-            className="w-full resize-none bg-transparent px-3 py-2 pr-11 text-[14px] outline-none placeholder:text-muted-foreground"
-          />
-          <button
-            onClick={submit}
-            disabled={!input.trim() || isLoading}
-            className="absolute bottom-2 right-2 rounded-md bg-primary p-2 text-primary-foreground disabled:opacity-40"
-          >
-            <Send className="h-4 w-4" />
-          </button>
-        </div>
+      <ChatComposer
+        input={input}
+        setInput={setInput}
+        submit={submit}
+        isLoading={isLoading}
+        allFilePaths={allFilePaths}
+        inputRef={inputRef}
+      />
+    </div>
+  );
+}
+
+const SLASH_COMMANDS: Array<{ cmd: string; desc: string; template: string }> = [
+  { cmd: "/search", desc: "Search across all files", template: "/search " },
+  { cmd: "/create", desc: "Create a new file", template: "/create " },
+  { cmd: "/refactor", desc: "Refactor the active file", template: "/refactor " },
+  { cmd: "/explain", desc: "Explain the active file", template: "/explain " },
+  { cmd: "/diff", desc: "Show the last diff", template: "/diff" },
+  { cmd: "/rollback", desc: "Undo the last agent change", template: "/rollback" },
+];
+
+function ChatComposer({
+  input,
+  setInput,
+  submit,
+  isLoading,
+  allFilePaths,
+  inputRef,
+}: {
+  input: string;
+  setInput: (v: string) => void;
+  submit: () => void;
+  isLoading: boolean;
+  allFilePaths: string[];
+  inputRef: React.RefObject<HTMLTextAreaElement | null>;
+}) {
+  const [rows, setRows] = useState(3);
+  const caret = inputRef.current?.selectionStart ?? input.length;
+  const before = input.slice(0, caret);
+  const mentionMatch = /(?:^|\s)@([\w./\-]*)$/.exec(before);
+  const slashMatch = /^\/(\w*)$/.exec(input);
+
+  const mentionQuery = mentionMatch?.[1] ?? null;
+  const slashQuery = slashMatch?.[1] ?? null;
+
+  const mentionMatches = useMemo(() => {
+    if (mentionQuery === null) return [];
+    const q = mentionQuery.toLowerCase();
+    return allFilePaths.filter((p) => p.toLowerCase().includes(q)).slice(0, 8);
+  }, [mentionQuery, allFilePaths]);
+
+  const slashMatches = useMemo(() => {
+    if (slashQuery === null) return [];
+    const q = slashQuery.toLowerCase();
+    return SLASH_COMMANDS.filter((c) => c.cmd.slice(1).startsWith(q));
+  }, [slashQuery]);
+
+  const insertMention = (path: string) => {
+    if (!mentionMatch) return;
+    const at = before.lastIndexOf("@");
+    const next = input.slice(0, at) + `@${path} ` + input.slice(caret);
+    setInput(next);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  };
+  const insertSlash = (template: string) => {
+    setInput(template);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  };
+
+  const showSuggestions = mentionMatches.length > 0 || slashMatches.length > 0;
+
+  return (
+    <div className="border-t border-border p-2 sm:p-3">
+      <div className="relative rounded-md border border-border bg-background focus-within:border-primary">
+        {showSuggestions && (
+          <div className="absolute bottom-full left-0 right-0 mb-1 max-h-56 overflow-y-auto rounded-md border border-border bg-popover shadow-lg z-10">
+            {slashMatches.map((c) => (
+              <button
+                key={c.cmd}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  insertSlash(c.template);
+                }}
+                className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-xs hover:bg-accent"
+              >
+                <span className="font-mono text-primary">{c.cmd}</span>
+                <span className="text-muted-foreground">{c.desc}</span>
+              </button>
+            ))}
+            {mentionMatches.map((p) => (
+              <button
+                key={p}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  insertMention(p);
+                }}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-accent"
+              >
+                <span className="font-mono">@{p}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        <textarea
+          ref={inputRef}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey && !showSuggestions) {
+              e.preventDefault();
+              submit();
+            }
+          }}
+          placeholder="Ask the agent… try /search, /refactor or @filename"
+          rows={rows}
+          className="w-full resize-y bg-transparent px-3 py-2 pr-11 text-[14px] outline-none placeholder:text-muted-foreground min-h-[60px] max-h-[260px]"
+        />
+        <button
+          onClick={() => setRows((r) => (r >= 8 ? 2 : Math.min(8, r + 2)))}
+          title="Resize input"
+          className="absolute left-1.5 bottom-1.5 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-accent"
+        >
+          {rows} rows
+        </button>
+        <button
+          onClick={submit}
+          disabled={!input.trim() || isLoading}
+          className="absolute bottom-2 right-2 rounded-md bg-primary p-2 text-primary-foreground disabled:opacity-40"
+        >
+          <Send className="h-4 w-4" />
+        </button>
       </div>
     </div>
   );
