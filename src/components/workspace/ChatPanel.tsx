@@ -576,17 +576,7 @@ export function ChatPanel({
 
           );
         })}
-        {showThinking && (
-          <div className="flex gap-2.5">
-            <div className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400">
-              <Sparkles className="h-3.5 w-3.5" />
-            </div>
-            <div className="flex items-center gap-2 rounded-md border border-border bg-card/60 px-3 py-2 text-sm text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-              Thinking…
-            </div>
-          </div>
-        )}
+        {showThinking && <ThinkingBox lastMessage={lastMsg} status={status} />}
       </div>
 
       <ChatComposer
