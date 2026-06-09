@@ -191,11 +191,7 @@ export function FileTree({
                 ) : (
                   <ChevronRight className="h-3 w-3 flex-shrink-0" />
                 )}
-                {isOpen ? (
-                  <FolderOpen className="h-3.5 w-3.5 flex-shrink-0 text-primary" />
-                ) : (
-                  <Folder className="h-3.5 w-3.5 flex-shrink-0 text-primary" />
-                )}
+                <FolderNodeIcon open={isOpen} />
                 <span className="truncate">{child.name}</span>
               </button>
             ) : (
@@ -204,7 +200,7 @@ export function FileTree({
                 className="flex items-center gap-1 flex-1 min-w-0"
               >
                 <span className="w-3" />
-                <FileIcon className={`h-3.5 w-3.5 flex-shrink-0 ${fileIconColor(child.name)}`} />
+                <FileNodeIcon name={child.name} />
                 <span className="truncate">{child.name}</span>
               </button>
             )}
