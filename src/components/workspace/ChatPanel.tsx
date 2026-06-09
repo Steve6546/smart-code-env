@@ -462,23 +462,86 @@ export function ChatPanel({
             .map((p) => (p.type === "text" ? (p as { text: string }).text : ""))
             .join("");
           const isEditing = editingId === m.id;
+          const messageBody = isEditing ? (
+            <div className="space-y-2">
+              <textarea
+                value={editingText}
+                onChange={(e) => setEditingText(e.target.value)}
+                className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-primary"
+                rows={3}
+              />
+              <div className="flex gap-2">
+                <button onClick={saveEdit} className="rounded bg-primary px-2 py-1 text-xs text-primary-foreground">
+                  Save
+                </button>
+                <button onClick={() => setEditingId(null)} className="rounded border border-border px-2 py-1 text-xs">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="prose prose-sm prose-invert max-w-none break-words text-[14px] leading-relaxed">
+              {m.parts.map((p, i) => {
+                if (p.type === "text") {
+                  return (
+                    <ReactMarkdown
+                      key={i}
+                      components={{
+                        code({ className, children, ...props }) {
+                          const match = /language-(\w+)/.exec(className || "");
+                          const text = String(children).replace(/\n$/, "");
+                          const isBlock = text.includes("\n") || !!match;
+                          if (!isBlock) {
+                            return (
+                              <code className="rounded bg-muted px-1 py-0.5 text-[13px]" {...props}>
+                                {children}
+                              </code>
+                            );
+                          }
+                          return (
+                            <CodeBlock
+                              code={text}
+                              language={match?.[1] ?? "text"}
+                              projectId={projectId}
+                              onApplied={onApplied}
+                            />
+                          );
+                        },
+                      }}
+                    >
+                      {(p as { text: string }).text}
+                    </ReactMarkdown>
+                  );
+                }
+                if (p.type.startsWith("tool-")) {
+                  return <ToolPart key={i} part={p as never} />;
+                }
+                return null;
+              })}
+            </div>
+          );
+
           return (
             <motion.div
               key={m.id}
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.18 }}
-              className="group flex gap-2.5"
+              className={`group flex gap-2.5 ${isUser ? "flex-row-reverse" : ""}`}
             >
               <div
                 className={`mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full ${
-                  isUser ? "bg-primary/20 text-primary" : "bg-emerald-500/15 text-emerald-400"
+                  isUser ? "bg-primary text-primary-foreground" : "bg-emerald-500/15 text-emerald-400"
                 }`}
               >
                 {isUser ? <UserIcon className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
               </div>
-              <div className="min-w-0 flex-1">
-                <div className="mb-1 flex items-center gap-2 text-[11px] text-muted-foreground">
+              <div className={`min-w-0 ${isUser ? "max-w-[85%]" : "flex-1"}`}>
+                <div
+                  className={`mb-1 flex items-center gap-2 text-[11px] text-muted-foreground ${
+                    isUser ? "flex-row-reverse" : ""
+                  }`}
+                >
                   <span className={`font-semibold ${isUser ? "text-primary" : "text-emerald-400"}`}>
                     {isUser ? "You" : "CodeMind"}
                   </span>
@@ -489,7 +552,7 @@ export function ChatPanel({
                         setEditingId(m.id);
                         setEditingText(textOfMsg);
                       }}
-                      className="ml-auto opacity-0 transition group-hover:opacity-100 hover:text-foreground"
+                      className="opacity-0 transition group-hover:opacity-100 hover:text-foreground"
                       title="Edit message"
                     >
                       <Pencil className="h-3 w-3" />
@@ -506,74 +569,19 @@ export function ChatPanel({
                     </button>
                   )}
                 </div>
-                {isEditing ? (
-
-                  <div className="space-y-2">
-                    <textarea
-                      value={editingText}
-                      onChange={(e) => setEditingText(e.target.value)}
-                      className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-primary"
-                      rows={3}
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        onClick={saveEdit}
-                        className="rounded bg-primary px-2 py-1 text-xs text-primary-foreground"
-                      >
-                        Save
-                      </button>
-                      <button
-                        onClick={() => setEditingId(null)}
-                        className="rounded border border-border px-2 py-1 text-xs"
-                      >
-                        Cancel
-                      </button>
-                    </div>
+                {isUser && !isEditing ? (
+                  <div className="rounded-2xl rounded-tr-sm bg-primary px-3.5 py-2 text-primary-foreground text-[14px] leading-relaxed break-words whitespace-pre-wrap">
+                    {textOfMsg}
+                  </div>
+                ) : !isUser ? (
+                  <div className="rounded-2xl rounded-tl-sm border border-border bg-card/60 px-3.5 py-2">
+                    {messageBody}
                   </div>
                 ) : (
-                  <div className="prose prose-sm prose-invert max-w-none break-words text-[14px] leading-relaxed">
-                    {m.parts.map((p, i) => {
-                      if (p.type === "text") {
-                        return (
-                          <ReactMarkdown
-                            key={i}
-                            components={{
-                              code({ className, children, ...props }) {
-                                const match = /language-(\w+)/.exec(className || "");
-                                const text = String(children).replace(/\n$/, "");
-                                const isBlock = text.includes("\n") || !!match;
-                                if (!isBlock) {
-                                  return (
-                                    <code className="rounded bg-muted px-1 py-0.5 text-[13px]" {...props}>
-                                      {children}
-                                    </code>
-                                  );
-                                }
-                                return (
-                                  <CodeBlock
-                                    code={text}
-                                    language={match?.[1] ?? "text"}
-                                    projectId={projectId}
-                                    onApplied={onApplied}
-                                  />
-                                );
-                              },
-                            }}
-                          >
-                            {(p as { text: string }).text}
-                          </ReactMarkdown>
-                        );
-                      }
-                      if (p.type.startsWith("tool-")) {
-                        return <ToolPart key={i} part={p as never} />;
-                      }
-                      return null;
-                    })}
-                  </div>
+                  messageBody
                 )}
               </div>
             </motion.div>
-
           );
         })}
         {showThinking && <ThinkingBox lastMessage={lastMsg} status={status} />}
@@ -615,7 +623,16 @@ function ChatComposer({
   allFilePaths: string[];
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
 }) {
-  const [rows, setRows] = useState(3);
+  // Auto-grow textarea between 2 and 6 rows
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const lineHeight = 22;
+    const minH = lineHeight * 2 + 16;
+    const maxH = lineHeight * 6 + 16;
+    el.style.height = Math.min(maxH, Math.max(minH, el.scrollHeight)) + "px";
+  }, [input, inputRef]);
   const caret = inputRef.current?.selectionStart ?? input.length;
   const before = input.slice(0, caret);
   const mentionMatch = /(?:^|\s)@([\w./\-]*)$/.exec(before);
@@ -693,20 +710,14 @@ function ChatComposer({
             }
           }}
           placeholder="Ask the agent… try /search, /refactor or @filename"
-          rows={rows}
-          className="w-full resize-y bg-transparent px-3 py-2 pr-11 text-[14px] outline-none placeholder:text-muted-foreground min-h-[60px] max-h-[260px]"
+          rows={2}
+          className="w-full resize-none bg-transparent px-3 py-2 pr-12 text-[14px] outline-none placeholder:text-muted-foreground overflow-y-auto"
         />
-        <button
-          onClick={() => setRows((r) => (r >= 8 ? 2 : Math.min(8, r + 2)))}
-          title="Resize input"
-          className="absolute left-1.5 bottom-1.5 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-accent"
-        >
-          {rows} rows
-        </button>
         <button
           onClick={submit}
           disabled={!input.trim() || isLoading}
-          className="absolute bottom-2 right-2 rounded-md bg-primary p-2 text-primary-foreground disabled:opacity-40"
+          className="absolute bottom-2 right-2 rounded-md bg-primary p-2 text-primary-foreground transition hover:opacity-90 disabled:opacity-40"
+          title="Send (Enter)"
         >
           <Send className="h-4 w-4" />
         </button>
