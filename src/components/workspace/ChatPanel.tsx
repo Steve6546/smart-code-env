@@ -21,6 +21,7 @@ import {
   User as UserIcon,
   CheckCircle2,
   XCircle,
+  ArrowDown,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
