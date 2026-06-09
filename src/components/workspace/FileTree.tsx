@@ -63,26 +63,6 @@ function buildTree(files: FileRow[]): Node {
   return root;
 }
 
-const LANG_COLORS: Record<string, string> = {
-  py: "text-yellow-400",
-  js: "text-yellow-300",
-  jsx: "text-yellow-300",
-  ts: "text-sky-400",
-  tsx: "text-sky-400",
-  html: "text-orange-400",
-  css: "text-blue-400",
-  scss: "text-pink-400",
-  json: "text-amber-300",
-  md: "text-zinc-300",
-  yml: "text-purple-300",
-  yaml: "text-purple-300",
-  sh: "text-emerald-400",
-};
-function fileIconColor(name: string) {
-  const ext = name.split(".").pop()?.toLowerCase() ?? "";
-  return LANG_COLORS[ext] ?? "text-muted-foreground";
-}
-
 function countDescendants(node: Node): number {
   let n = node.file ? 1 : 0;
   for (const c of node.children.values()) n += countDescendants(c);
