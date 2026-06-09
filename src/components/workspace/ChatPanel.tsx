@@ -21,6 +21,7 @@ import {
   User as UserIcon,
   CheckCircle2,
   XCircle,
+  ArrowDown,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -294,10 +295,20 @@ export function ChatPanel({
   const [editingText, setEditingText] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [stickToBottom, setStickToBottom] = useState(true);
+
+  const onScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setStickToBottom(distance < 80);
+  };
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [messages]);
+    const el = scrollRef.current;
+    if (!el || !stickToBottom) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [messages, stickToBottom]);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -439,7 +450,12 @@ export function ChatPanel({
         </div>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
+      <div className="relative flex-1 min-h-0">
+      <div
+        ref={scrollRef}
+        onScroll={onScroll}
+        className="absolute inset-0 overflow-y-auto overscroll-contain px-3 py-4 sm:px-4 space-y-5 scroll-smooth"
+      >
         {messages.length === 0 && (
           <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
             <p className="mb-2 font-medium text-foreground">
@@ -576,6 +592,9 @@ export function ChatPanel({
                 ) : !isUser ? (
                   <div className="rounded-2xl rounded-tl-sm border border-border bg-card/60 px-3.5 py-2">
                     {messageBody}
+                    {status === "streaming" && m.id === lastMsg?.id && (
+                      <span className="ml-0.5 inline-block h-3.5 w-1.5 translate-y-0.5 animate-pulse rounded-sm bg-primary align-middle" />
+                    )}
                   </div>
                 ) : (
                   messageBody
@@ -586,6 +605,21 @@ export function ChatPanel({
         })}
         {showThinking && <ThinkingBox lastMessage={lastMsg} status={status} />}
       </div>
+      {!stickToBottom && (
+        <button
+          onClick={() => {
+            setStickToBottom(true);
+            scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+          }}
+          className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1 rounded-full border border-border bg-card/95 px-3 py-1 text-[11px] shadow-md hover:bg-accent backdrop-blur"
+        >
+          <ArrowDown className="h-3 w-3" />
+          Jump to latest
+        </button>
+      )}
+      </div>
+
+
 
       <ChatComposer
         input={input}
