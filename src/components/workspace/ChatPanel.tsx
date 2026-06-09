@@ -602,6 +602,21 @@ export function ChatPanel({
         })}
         {showThinking && <ThinkingBox lastMessage={lastMsg} status={status} />}
       </div>
+      {!stickToBottom && (
+        <button
+          onClick={() => {
+            setStickToBottom(true);
+            scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+          }}
+          className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1 rounded-full border border-border bg-card/95 px-3 py-1 text-[11px] shadow-md hover:bg-accent backdrop-blur"
+        >
+          <ArrowDown className="h-3 w-3" />
+          Jump to latest
+        </button>
+      )}
+      </div>
+
+
 
       <ChatComposer
         input={input}
