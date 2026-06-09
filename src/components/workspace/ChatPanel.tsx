@@ -592,6 +592,9 @@ export function ChatPanel({
                 ) : !isUser ? (
                   <div className="rounded-2xl rounded-tl-sm border border-border bg-card/60 px-3.5 py-2">
                     {messageBody}
+                    {status === "streaming" && m.id === lastMsg?.id && (
+                      <span className="ml-0.5 inline-block h-3.5 w-1.5 translate-y-0.5 animate-pulse rounded-sm bg-primary align-middle" />
+                    )}
                   </div>
                 ) : (
                   messageBody
