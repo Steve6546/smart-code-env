@@ -4,13 +4,11 @@ import { useMutation } from "@tanstack/react-query";
 import {
   ChevronRight,
   ChevronDown,
-  File as FileIcon,
-  Folder,
-  FolderOpen,
   Plus,
   FolderPlus,
   MoreVertical,
 } from "lucide-react";
+import { FileNodeIcon, FolderNodeIcon } from "./file-icons";
 import { createFile, deletePath, movePath } from "@/lib/workspace.functions";
 import { toast } from "sonner";
 import {
