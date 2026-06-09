@@ -295,10 +295,20 @@ export function ChatPanel({
   const [editingText, setEditingText] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [stickToBottom, setStickToBottom] = useState(true);
+
+  const onScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setStickToBottom(distance < 80);
+  };
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [messages]);
+    const el = scrollRef.current;
+    if (!el || !stickToBottom) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [messages, stickToBottom]);
 
   useEffect(() => {
     inputRef.current?.focus();
