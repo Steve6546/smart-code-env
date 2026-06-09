@@ -1,10 +1,11 @@
 import {
-  SiPython, SiJavascript, SiTypescript, SiReact, SiHtml5, SiCss3, SiSass,
+  SiPython, SiJavascript, SiTypescript, SiReact, SiHtml5, SiCss, SiSass,
   SiJson, SiMarkdown, SiYaml, SiGnubash, SiRust, SiGo, SiPhp, SiRuby,
   SiSwift, SiKotlin, SiCplusplus, SiC, SiDocker, SiGit, SiVuedotjs,
   SiSvelte, SiGraphql, SiToml, SiPrisma, SiTailwindcss, SiVite, SiNpm,
   SiEslint, SiPrettier,
 } from "react-icons/si";
+const SiCss3 = SiCss;
 import { FaJava, FaDatabase, FaFileCode, FaImage, FaFont, FaLock } from "react-icons/fa";
 import { File as FileIcon, FileText, Folder, FolderOpen } from "lucide-react";
 import type { ComponentType, SVGProps } from "react";
