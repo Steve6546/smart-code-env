@@ -623,7 +623,16 @@ function ChatComposer({
   allFilePaths: string[];
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
 }) {
-  const [rows, setRows] = useState(3);
+  // Auto-grow textarea between 2 and 6 rows
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const lineHeight = 22;
+    const minH = lineHeight * 2 + 16;
+    const maxH = lineHeight * 6 + 16;
+    el.style.height = Math.min(maxH, Math.max(minH, el.scrollHeight)) + "px";
+  }, [input, inputRef]);
   const caret = inputRef.current?.selectionStart ?? input.length;
   const before = input.slice(0, caret);
   const mentionMatch = /(?:^|\s)@([\w./\-]*)$/.exec(before);
@@ -701,20 +710,14 @@ function ChatComposer({
             }
           }}
           placeholder="Ask the agent… try /search, /refactor or @filename"
-          rows={rows}
-          className="w-full resize-y bg-transparent px-3 py-2 pr-11 text-[14px] outline-none placeholder:text-muted-foreground min-h-[60px] max-h-[260px]"
+          rows={2}
+          className="w-full resize-none bg-transparent px-3 py-2 pr-12 text-[14px] outline-none placeholder:text-muted-foreground overflow-y-auto"
         />
-        <button
-          onClick={() => setRows((r) => (r >= 8 ? 2 : Math.min(8, r + 2)))}
-          title="Resize input"
-          className="absolute left-1.5 bottom-1.5 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-accent"
-        >
-          {rows} rows
-        </button>
         <button
           onClick={submit}
           disabled={!input.trim() || isLoading}
-          className="absolute bottom-2 right-2 rounded-md bg-primary p-2 text-primary-foreground disabled:opacity-40"
+          className="absolute bottom-2 right-2 rounded-md bg-primary p-2 text-primary-foreground transition hover:opacity-90 disabled:opacity-40"
+          title="Send (Enter)"
         >
           <Send className="h-4 w-4" />
         </button>
