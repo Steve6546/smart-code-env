@@ -877,3 +877,73 @@ function ThinkingBox({
     </motion.div>
   );
 }
+
+type ToolPartLike = {
+  type: string;
+  state?: string;
+  toolName?: string;
+  input?: { path?: string; from?: string; to?: string; pattern?: string };
+  output?: { ok?: boolean; error?: string; action?: string; path?: string; from?: string; to?: string };
+};
+
+function AgentActivity({ parts, streaming }: { parts: ToolPartLike[]; streaming: boolean }) {
+  const [open, setOpen] = useState(streaming);
+  useEffect(() => {
+    if (streaming) setOpen(true);
+  }, [streaming]);
+
+  const total = parts.length;
+  const done = parts.filter((p) => p.state === "output-available").length;
+  const failed = parts.filter((p) => p.state === "output-available" && p.output?.ok === false).length;
+  const allDone = done === total && total > 0;
+
+  const headerLabel = streaming
+    ? `Working… ${done}/${total} steps`
+    : failed
+      ? `Completed with ${failed} error${failed === 1 ? "" : "s"} · ${total} step${total === 1 ? "" : "s"}`
+      : `Completed ${total} step${total === 1 ? "" : "s"}`;
+
+  return (
+    <div
+      className={`not-prose my-2 overflow-hidden rounded-lg border ${
+        failed ? "border-destructive/40 bg-destructive/5" : "border-border bg-card/40"
+      }`}
+    >
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px]"
+      >
+        {streaming ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+        ) : failed ? (
+          <XCircle className="h-3.5 w-3.5 text-destructive" />
+        ) : allDone ? (
+          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+        ) : (
+          <Wrench className="h-3.5 w-3.5 text-primary" />
+        )}
+        <span className="font-medium">{headerLabel}</span>
+        <span className="ml-auto">
+          {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+        </span>
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="overflow-hidden border-t border-border"
+          >
+            <div className="px-2 py-2 space-y-1">
+              {parts.map((p, i) => (
+                <ToolPart key={i} part={p as never} />
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
