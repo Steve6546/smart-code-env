@@ -288,6 +288,109 @@ export function FileTree({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <NewItemDialog
+        open={!!createDialog}
+        parent={createDialog?.parent ?? ""}
+        kind={createDialog?.kind ?? "file"}
+        existing={new Set(files.map((f) => f.path))}
+        onClose={() => setCreateDialog(null)}
+        onCreate={(path, isFolder) => {
+          createMut.mutate({ path, isFolder });
+          setCreateDialog(null);
+        }}
+      />
     </div>
+  );
+}
+
+function NewItemDialog({
+  open,
+  parent,
+  kind,
+  existing,
+  onClose,
+  onCreate,
+}: {
+  open: boolean;
+  parent: string;
+  kind: "file" | "folder";
+  existing: Set<string>;
+  onClose: () => void;
+  onCreate: (path: string, isFolder: boolean) => void;
+}) {
+  const [name, setName] = useState("");
+  useEffect(() => {
+    if (open) setName(kind === "file" ? "newfile.ts" : "new-folder");
+  }, [open, kind]);
+
+  const fullPath = parent ? `${parent}/${name}` : name;
+  const trimmed = name.trim();
+  const invalidChars = /[\\:*?"<>|]/.test(trimmed) || trimmed.includes("//");
+  const collides = existing.has(fullPath);
+  const error = !trimmed
+    ? "Name is required"
+    : invalidChars
+      ? "Invalid characters in name"
+      : collides
+        ? "A file or folder with this path already exists"
+        : null;
+
+  const { Icon, color } = kind === "file" && trimmed
+    ? getFileIcon(trimmed.split("/").pop() ?? "")
+    : { Icon: FolderNodeIcon as never, color: "text-sky-400" };
+
+  const submit = () => {
+    if (error) return;
+    onCreate(fullPath, kind === "folder");
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>New {kind === "file" ? "file" : "folder"}</DialogTitle>
+          <DialogDescription>
+            {parent ? (
+              <>
+                Inside <span className="font-mono text-foreground">{parent}/</span>
+              </>
+            ) : (
+              "At project root"
+            )}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex items-center gap-3 rounded-md border border-border bg-muted/30 px-3 py-2.5">
+          {kind === "file" ? (
+            <FileNodeIcon name={trimmed || "file"} className="h-5 w-5" />
+          ) : (
+            <FolderNodeIcon className="h-5 w-5" />
+          )}
+          <span className="truncate font-mono text-sm">{fullPath || "—"}</span>
+        </div>
+
+        <Input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") submit();
+          }}
+          placeholder={kind === "file" ? "e.g. components/Button.tsx" : "e.g. utils"}
+          className="font-mono"
+        />
+        {error && <p className="text-xs text-destructive">{error}</p>}
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={submit} disabled={!!error}>
+            Create
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
