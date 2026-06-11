@@ -307,7 +307,10 @@ export function ChatPanel({
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || !stickToBottom) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    const raf = requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
+    return () => cancelAnimationFrame(raf);
   }, [messages, stickToBottom]);
 
   useEffect(() => {
@@ -350,7 +353,9 @@ export function ChatPanel({
 
   const isLoading = status === "submitted" || status === "streaming";
   const lastMsg = messages[messages.length - 1];
-  const showThinking = isLoading;
+  // Only show the standalone ThinkingBox until the assistant message starts streaming.
+  // After that, agent activity is rendered INSIDE the assistant bubble via <AgentActivity/>.
+  const showThinking = status === "submitted" || (isLoading && lastMsg?.role !== "assistant");
 
   const submit = async () => {
     const text = input.trim();
@@ -497,43 +502,50 @@ export function ChatPanel({
             </div>
           ) : (
             <div className="prose prose-sm prose-invert max-w-none break-words text-[14px] leading-relaxed">
-              {m.parts.map((p, i) => {
-                if (p.type === "text") {
-                  return (
-                    <ReactMarkdown
-                      key={i}
-                      components={{
-                        code({ className, children, ...props }) {
-                          const match = /language-(\w+)/.exec(className || "");
-                          const text = String(children).replace(/\n$/, "");
-                          const isBlock = text.includes("\n") || !!match;
-                          if (!isBlock) {
+              {(() => {
+                const parts = m.parts as Array<{ type: string; text?: string; state?: string; toolName?: string; input?: unknown; output?: unknown }>;
+                const toolParts = parts.filter((p) => p.type.startsWith("tool-"));
+                const textParts = parts
+                  .map((p, i) => ({ p, i }))
+                  .filter(({ p }) => p.type === "text");
+                const isStreaming = status === "streaming" && m.id === lastMsg?.id;
+                return (
+                  <>
+                    {toolParts.length > 0 && (
+                      <AgentActivity parts={toolParts as never} streaming={isStreaming} />
+                    )}
+                    {textParts.map(({ p, i }) => (
+                      <ReactMarkdown
+                        key={i}
+                        components={{
+                          code({ className, children, ...props }) {
+                            const match = /language-(\w+)/.exec(className || "");
+                            const text = String(children).replace(/\n$/, "");
+                            const isBlock = text.includes("\n") || !!match;
+                            if (!isBlock) {
+                              return (
+                                <code className="rounded bg-muted px-1 py-0.5 text-[13px]" {...props}>
+                                  {children}
+                                </code>
+                              );
+                            }
                             return (
-                              <code className="rounded bg-muted px-1 py-0.5 text-[13px]" {...props}>
-                                {children}
-                              </code>
+                              <CodeBlock
+                                code={text}
+                                language={match?.[1] ?? "text"}
+                                projectId={projectId}
+                                onApplied={onApplied}
+                              />
                             );
-                          }
-                          return (
-                            <CodeBlock
-                              code={text}
-                              language={match?.[1] ?? "text"}
-                              projectId={projectId}
-                              onApplied={onApplied}
-                            />
-                          );
-                        },
-                      }}
-                    >
-                      {(p as { text: string }).text}
-                    </ReactMarkdown>
-                  );
-                }
-                if (p.type.startsWith("tool-")) {
-                  return <ToolPart key={i} part={p as never} />;
-                }
-                return null;
-              })}
+                          },
+                        }}
+                      >
+                        {(p.text ?? "")}
+                      </ReactMarkdown>
+                    ))}
+                  </>
+                );
+              })()}
             </div>
           );
 
@@ -863,5 +875,75 @@ function ThinkingBox({
         </ul>
       </div>
     </motion.div>
+  );
+}
+
+type ToolPartLike = {
+  type: string;
+  state?: string;
+  toolName?: string;
+  input?: { path?: string; from?: string; to?: string; pattern?: string };
+  output?: { ok?: boolean; error?: string; action?: string; path?: string; from?: string; to?: string };
+};
+
+function AgentActivity({ parts, streaming }: { parts: ToolPartLike[]; streaming: boolean }) {
+  const [open, setOpen] = useState(streaming);
+  useEffect(() => {
+    if (streaming) setOpen(true);
+  }, [streaming]);
+
+  const total = parts.length;
+  const done = parts.filter((p) => p.state === "output-available").length;
+  const failed = parts.filter((p) => p.state === "output-available" && p.output?.ok === false).length;
+  const allDone = done === total && total > 0;
+
+  const headerLabel = streaming
+    ? `Working… ${done}/${total} steps`
+    : failed
+      ? `Completed with ${failed} error${failed === 1 ? "" : "s"} · ${total} step${total === 1 ? "" : "s"}`
+      : `Completed ${total} step${total === 1 ? "" : "s"}`;
+
+  return (
+    <div
+      className={`not-prose my-2 overflow-hidden rounded-lg border ${
+        failed ? "border-destructive/40 bg-destructive/5" : "border-border bg-card/40"
+      }`}
+    >
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px]"
+      >
+        {streaming ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+        ) : failed ? (
+          <XCircle className="h-3.5 w-3.5 text-destructive" />
+        ) : allDone ? (
+          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+        ) : (
+          <Wrench className="h-3.5 w-3.5 text-primary" />
+        )}
+        <span className="font-medium">{headerLabel}</span>
+        <span className="ml-auto">
+          {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+        </span>
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="overflow-hidden border-t border-border"
+          >
+            <div className="px-2 py-2 space-y-1">
+              {parts.map((p, i) => (
+                <ToolPart key={i} part={p as never} />
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }

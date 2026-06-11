@@ -28,6 +28,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 type FileRow = {
   id: string;
@@ -85,6 +95,7 @@ export function FileTree({
   const tree = useMemo(() => buildTree(files), [files]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["src"]));
   const [pendingDelete, setPendingDelete] = useState<{ path: string; isFolder: boolean; count: number } | null>(null);
+  const [createDialog, setCreateDialog] = useState<{ parent: string; kind: "file" | "folder" } | null>(null);
 
   const createFn = useServerFn(createFile);
   const deletePathFn = useServerFn(deletePath);
@@ -124,16 +135,8 @@ export function FileTree({
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const newFileAt = (parent: string) => {
-    const suggestion = parent ? `${parent}/newfile.ts` : "newfile.ts";
-    const path = prompt("New file path", suggestion);
-    if (path?.trim()) createMut.mutate({ path: path.trim() });
-  };
-  const newFolderAt = (parent: string) => {
-    const suggestion = parent ? `${parent}/new-folder` : "new-folder";
-    const path = prompt("New folder path", suggestion);
-    if (path?.trim()) createMut.mutate({ path: path.trim(), isFolder: true });
-  };
+  const newFileAt = (parent: string) => setCreateDialog({ parent, kind: "file" });
+  const newFolderAt = (parent: string) => setCreateDialog({ parent, kind: "folder" });
 
   const toggle = (p: string) =>
     setExpanded((prev) => {
@@ -285,6 +288,105 @@ export function FileTree({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <NewItemDialog
+        open={!!createDialog}
+        parent={createDialog?.parent ?? ""}
+        kind={createDialog?.kind ?? "file"}
+        existing={new Set(files.map((f) => f.path))}
+        onClose={() => setCreateDialog(null)}
+        onCreate={(path, isFolder) => {
+          createMut.mutate({ path, isFolder });
+          setCreateDialog(null);
+        }}
+      />
     </div>
+  );
+}
+
+function NewItemDialog({
+  open,
+  parent,
+  kind,
+  existing,
+  onClose,
+  onCreate,
+}: {
+  open: boolean;
+  parent: string;
+  kind: "file" | "folder";
+  existing: Set<string>;
+  onClose: () => void;
+  onCreate: (path: string, isFolder: boolean) => void;
+}) {
+  const [name, setName] = useState("");
+  useEffect(() => {
+    if (open) setName(kind === "file" ? "newfile.ts" : "new-folder");
+  }, [open, kind]);
+
+  const fullPath = parent ? `${parent}/${name}` : name;
+  const trimmed = name.trim();
+  const invalidChars = /[\\:*?"<>|]/.test(trimmed) || trimmed.includes("//");
+  const collides = existing.has(fullPath);
+  const error = !trimmed
+    ? "Name is required"
+    : invalidChars
+      ? "Invalid characters in name"
+      : collides
+        ? "A file or folder with this path already exists"
+        : null;
+
+  const submit = () => {
+    if (error) return;
+    onCreate(fullPath, kind === "folder");
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>New {kind === "file" ? "file" : "folder"}</DialogTitle>
+          <DialogDescription>
+            {parent ? (
+              <>
+                Inside <span className="font-mono text-foreground">{parent}/</span>
+              </>
+            ) : (
+              "At project root"
+            )}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex items-center gap-3 rounded-md border border-border bg-muted/30 px-3 py-2.5">
+          {kind === "file" ? (
+            <FileNodeIcon name={trimmed || "file"} className="h-5 w-5" />
+          ) : (
+            <FolderNodeIcon className="h-5 w-5" />
+          )}
+          <span className="truncate font-mono text-sm">{fullPath || "—"}</span>
+        </div>
+
+        <Input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") submit();
+          }}
+          placeholder={kind === "file" ? "e.g. components/Button.tsx" : "e.g. utils"}
+          className="font-mono"
+        />
+        {error && <p className="text-xs text-destructive">{error}</p>}
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={submit} disabled={!!error}>
+            Create
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

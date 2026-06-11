@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { Code2, ArrowLeft, LogOut, FolderTree, FileCode, MessageSquare } from "lucide-react";
+import { motion, AnimatePresence, type PanInfo } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { FileTree } from "./FileTree";
@@ -195,12 +196,32 @@ export function Workspace({ projectId, threadId }: { projectId: string; threadId
         </PanelGroup>
       </div>
 
-      {/* Mobile: tab switcher */}
-      <div className="flex md:hidden flex-1 flex-col min-h-0">
-        <div className="flex-1 min-h-0 flex flex-col">
-          {mobileView === "files" && <div className="flex h-full flex-col bg-card">{filesPanel}</div>}
-          {mobileView === "editor" && <div className="flex h-full flex-col">{editorPanel}</div>}
-          {mobileView === "chat" && <div className="flex h-full flex-col bg-card">{chatPanel}</div>}
+      {/* Mobile: full-screen panel with swipe + tab switching */}
+      <div className="flex md:hidden flex-1 flex-col min-h-0 overflow-hidden">
+        <div className="relative flex-1 min-h-0 overflow-hidden">
+          <AnimatePresence initial={false} mode="wait">
+            <motion.div
+              key={mobileView}
+              initial={{ opacity: 0, x: 24 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -24 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
+              drag="x"
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={0.18}
+              onDragEnd={(_, info: PanInfo) => {
+                const order: MobileView[] = ["files", "editor", "chat"];
+                const idx = order.indexOf(mobileView);
+                if (info.offset.x < -60 && idx < order.length - 1) setMobileView(order[idx + 1]);
+                else if (info.offset.x > 60 && idx > 0) setMobileView(order[idx - 1]);
+              }}
+              className="absolute inset-0 flex flex-col bg-card"
+            >
+              {mobileView === "files" && filesPanel}
+              {mobileView === "editor" && editorPanel}
+              {mobileView === "chat" && chatPanel}
+            </motion.div>
+          </AnimatePresence>
         </div>
         <nav className="grid grid-cols-3 border-t border-border bg-card text-xs">
           {([
