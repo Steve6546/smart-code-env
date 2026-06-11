@@ -8,7 +8,7 @@ import {
   FolderPlus,
   MoreVertical,
 } from "lucide-react";
-import { FileNodeIcon, FolderNodeIcon, getFileIcon } from "./file-icons";
+import { FileNodeIcon, FolderNodeIcon } from "./file-icons";
 import { createFile, deletePath, movePath } from "@/lib/workspace.functions";
 import { toast } from "sonner";
 import {
@@ -335,10 +335,6 @@ function NewItemDialog({
       : collides
         ? "A file or folder with this path already exists"
         : null;
-
-  const { Icon, color } = kind === "file" && trimmed
-    ? getFileIcon(trimmed.split("/").pop() ?? "")
-    : { Icon: FolderNodeIcon as never, color: "text-sky-400" };
 
   const submit = () => {
     if (error) return;
