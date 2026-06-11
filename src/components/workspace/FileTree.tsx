@@ -135,16 +135,8 @@ export function FileTree({
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const newFileAt = (parent: string) => {
-    const suggestion = parent ? `${parent}/newfile.ts` : "newfile.ts";
-    const path = prompt("New file path", suggestion);
-    if (path?.trim()) createMut.mutate({ path: path.trim() });
-  };
-  const newFolderAt = (parent: string) => {
-    const suggestion = parent ? `${parent}/new-folder` : "new-folder";
-    const path = prompt("New folder path", suggestion);
-    if (path?.trim()) createMut.mutate({ path: path.trim(), isFolder: true });
-  };
+  const newFileAt = (parent: string) => setCreateDialog({ parent, kind: "file" });
+  const newFolderAt = (parent: string) => setCreateDialog({ parent, kind: "folder" });
 
   const toggle = (p: string) =>
     setExpanded((prev) => {
