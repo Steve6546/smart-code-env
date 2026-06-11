@@ -8,7 +8,7 @@ import {
   FolderPlus,
   MoreVertical,
 } from "lucide-react";
-import { FileNodeIcon, FolderNodeIcon } from "./file-icons";
+import { FileNodeIcon, FolderNodeIcon, getFileIcon } from "./file-icons";
 import { createFile, deletePath, movePath } from "@/lib/workspace.functions";
 import { toast } from "sonner";
 import {
@@ -28,6 +28,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 type FileRow = {
   id: string;
@@ -85,6 +95,7 @@ export function FileTree({
   const tree = useMemo(() => buildTree(files), [files]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["src"]));
   const [pendingDelete, setPendingDelete] = useState<{ path: string; isFolder: boolean; count: number } | null>(null);
+  const [createDialog, setCreateDialog] = useState<{ parent: string; kind: "file" | "folder" } | null>(null);
 
   const createFn = useServerFn(createFile);
   const deletePathFn = useServerFn(deletePath);
