@@ -353,7 +353,9 @@ export function ChatPanel({
 
   const isLoading = status === "submitted" || status === "streaming";
   const lastMsg = messages[messages.length - 1];
-  const showThinking = isLoading;
+  // Only show the standalone ThinkingBox until the assistant message starts streaming.
+  // After that, agent activity is rendered INSIDE the assistant bubble via <AgentActivity/>.
+  const showThinking = status === "submitted" || (isLoading && lastMsg?.role !== "assistant");
 
   const submit = async () => {
     const text = input.trim();
