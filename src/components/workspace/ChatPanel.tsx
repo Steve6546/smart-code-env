@@ -307,7 +307,10 @@ export function ChatPanel({
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || !stickToBottom) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    const raf = requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
+    return () => cancelAnimationFrame(raf);
   }, [messages, stickToBottom]);
 
   useEffect(() => {
@@ -497,43 +500,50 @@ export function ChatPanel({
             </div>
           ) : (
             <div className="prose prose-sm prose-invert max-w-none break-words text-[14px] leading-relaxed">
-              {m.parts.map((p, i) => {
-                if (p.type === "text") {
-                  return (
-                    <ReactMarkdown
-                      key={i}
-                      components={{
-                        code({ className, children, ...props }) {
-                          const match = /language-(\w+)/.exec(className || "");
-                          const text = String(children).replace(/\n$/, "");
-                          const isBlock = text.includes("\n") || !!match;
-                          if (!isBlock) {
+              {(() => {
+                const parts = m.parts as Array<{ type: string; text?: string; state?: string; toolName?: string; input?: unknown; output?: unknown }>;
+                const toolParts = parts.filter((p) => p.type.startsWith("tool-"));
+                const textParts = parts
+                  .map((p, i) => ({ p, i }))
+                  .filter(({ p }) => p.type === "text");
+                const isStreaming = status === "streaming" && m.id === lastMsg?.id;
+                return (
+                  <>
+                    {toolParts.length > 0 && (
+                      <AgentActivity parts={toolParts as never} streaming={isStreaming} />
+                    )}
+                    {textParts.map(({ p, i }) => (
+                      <ReactMarkdown
+                        key={i}
+                        components={{
+                          code({ className, children, ...props }) {
+                            const match = /language-(\w+)/.exec(className || "");
+                            const text = String(children).replace(/\n$/, "");
+                            const isBlock = text.includes("\n") || !!match;
+                            if (!isBlock) {
+                              return (
+                                <code className="rounded bg-muted px-1 py-0.5 text-[13px]" {...props}>
+                                  {children}
+                                </code>
+                              );
+                            }
                             return (
-                              <code className="rounded bg-muted px-1 py-0.5 text-[13px]" {...props}>
-                                {children}
-                              </code>
+                              <CodeBlock
+                                code={text}
+                                language={match?.[1] ?? "text"}
+                                projectId={projectId}
+                                onApplied={onApplied}
+                              />
                             );
-                          }
-                          return (
-                            <CodeBlock
-                              code={text}
-                              language={match?.[1] ?? "text"}
-                              projectId={projectId}
-                              onApplied={onApplied}
-                            />
-                          );
-                        },
-                      }}
-                    >
-                      {(p as { text: string }).text}
-                    </ReactMarkdown>
-                  );
-                }
-                if (p.type.startsWith("tool-")) {
-                  return <ToolPart key={i} part={p as never} />;
-                }
-                return null;
-              })}
+                          },
+                        }}
+                      >
+                        {(p.text ?? "")}
+                      </ReactMarkdown>
+                    ))}
+                  </>
+                );
+              })()}
             </div>
           );
 
