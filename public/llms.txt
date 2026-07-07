@@ -1,0 +1,8 @@
+# CodeMind
+
+> CodeMind is an AI pair-programmer that reads, patches, and refactors your files in real time — a full-stack AI code editor for building and shipping projects.
+
+## Pages
+
+- [Sign in](/auth): Sign in to CodeMind and open your AI-powered workspace.
+- [AI code editor for students](/students): How students can learn to code and ship projects with CodeMind.
