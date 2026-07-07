@@ -10,6 +10,28 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/auth")({
   ssr: false,
   component: AuthPage,
+  head: () => ({
+    meta: [
+      { title: "Sign in — CodeMind" },
+      {
+        name: "description",
+        content:
+          "Sign in to CodeMind, the AI pair-programmer that reads, patches, and refactors your files in real time.",
+      },
+      { property: "og:title", content: "Sign in — CodeMind" },
+      {
+        property: "og:description",
+        content: "Open your AI-powered workspace and start building with CodeMind.",
+      },
+      { property: "og:url", content: "https://smart-code-env.lovable.app/auth" },
+      { name: "twitter:title", content: "Sign in — CodeMind" },
+      {
+        name: "twitter:description",
+        content: "Open your AI-powered workspace and start building with CodeMind.",
+      },
+    ],
+    links: [{ rel: "canonical", href: "https://smart-code-env.lovable.app/auth" }],
+  }),
 });
 
 function AuthPage() {

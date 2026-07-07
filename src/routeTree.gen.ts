@@ -9,6 +9,8 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as StudentsRouteImport } from './routes/students'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
@@ -16,6 +18,16 @@ import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as AuthenticatedPProjectIdIndexRouteImport } from './routes/_authenticated/p.$projectId.index'
 import { Route as AuthenticatedPProjectIdThreadIdRouteImport } from './routes/_authenticated/p.$projectId.$threadId'
 
+const StudentsRoute = StudentsRouteImport.update({
+  id: '/students',
+  path: '/students',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
@@ -51,12 +63,16 @@ const AuthenticatedPProjectIdThreadIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/auth': typeof AuthRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/students': typeof StudentsRoute
   '/api/chat': typeof ApiChatRoute
   '/p/$projectId/$threadId': typeof AuthenticatedPProjectIdThreadIdRoute
   '/p/$projectId/': typeof AuthenticatedPProjectIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/students': typeof StudentsRoute
   '/api/chat': typeof ApiChatRoute
   '/': typeof AuthenticatedIndexRoute
   '/p/$projectId/$threadId': typeof AuthenticatedPProjectIdThreadIdRoute
@@ -66,6 +82,8 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/students': typeof StudentsRoute
   '/api/chat': typeof ApiChatRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/p/$projectId/$threadId': typeof AuthenticatedPProjectIdThreadIdRoute
@@ -76,15 +94,26 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/sitemap.xml'
+    | '/students'
     | '/api/chat'
     | '/p/$projectId/$threadId'
     | '/p/$projectId/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/auth' | '/api/chat' | '/' | '/p/$projectId/$threadId' | '/p/$projectId'
+  to:
+    | '/auth'
+    | '/sitemap.xml'
+    | '/students'
+    | '/api/chat'
+    | '/'
+    | '/p/$projectId/$threadId'
+    | '/p/$projectId'
   id:
     | '__root__'
     | '/_authenticated'
     | '/auth'
+    | '/sitemap.xml'
+    | '/students'
     | '/api/chat'
     | '/_authenticated/'
     | '/_authenticated/p/$projectId/$threadId'
@@ -94,11 +123,27 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  StudentsRoute: typeof StudentsRoute
   ApiChatRoute: typeof ApiChatRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/students': {
+      id: '/students'
+      path: '/students'
+      fullPath: '/students'
+      preLoaderRoute: typeof StudentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth': {
       id: '/auth'
       path: '/auth'
@@ -162,6 +207,8 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
+  StudentsRoute: StudentsRoute,
   ApiChatRoute: ApiChatRoute,
 }
 export const routeTree = rootRouteImport
