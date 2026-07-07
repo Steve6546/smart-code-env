@@ -14,6 +14,7 @@ import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as DocsBuildATodoAppWithCodemindRouteImport } from './routes/docs.build-a-todo-app-with-codemind'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as AuthenticatedPProjectIdIndexRouteImport } from './routes/_authenticated/p.$projectId.index'
 import { Route as AuthenticatedPProjectIdThreadIdRouteImport } from './routes/_authenticated/p.$projectId.$threadId'
@@ -42,6 +43,12 @@ const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const DocsBuildATodoAppWithCodemindRoute =
+  DocsBuildATodoAppWithCodemindRouteImport.update({
+    id: '/docs/build-a-todo-app-with-codemind',
+    path: '/docs/build-a-todo-app-with-codemind',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiChatRoute = ApiChatRouteImport.update({
   id: '/api/chat',
   path: '/api/chat',
@@ -66,6 +73,7 @@ export interface FileRoutesByFullPath {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/students': typeof StudentsRoute
   '/api/chat': typeof ApiChatRoute
+  '/docs/build-a-todo-app-with-codemind': typeof DocsBuildATodoAppWithCodemindRoute
   '/p/$projectId/$threadId': typeof AuthenticatedPProjectIdThreadIdRoute
   '/p/$projectId/': typeof AuthenticatedPProjectIdIndexRoute
 }
@@ -74,6 +82,7 @@ export interface FileRoutesByTo {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/students': typeof StudentsRoute
   '/api/chat': typeof ApiChatRoute
+  '/docs/build-a-todo-app-with-codemind': typeof DocsBuildATodoAppWithCodemindRoute
   '/': typeof AuthenticatedIndexRoute
   '/p/$projectId/$threadId': typeof AuthenticatedPProjectIdThreadIdRoute
   '/p/$projectId': typeof AuthenticatedPProjectIdIndexRoute
@@ -85,6 +94,7 @@ export interface FileRoutesById {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/students': typeof StudentsRoute
   '/api/chat': typeof ApiChatRoute
+  '/docs/build-a-todo-app-with-codemind': typeof DocsBuildATodoAppWithCodemindRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/p/$projectId/$threadId': typeof AuthenticatedPProjectIdThreadIdRoute
   '/_authenticated/p/$projectId/': typeof AuthenticatedPProjectIdIndexRoute
@@ -97,6 +107,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/students'
     | '/api/chat'
+    | '/docs/build-a-todo-app-with-codemind'
     | '/p/$projectId/$threadId'
     | '/p/$projectId/'
   fileRoutesByTo: FileRoutesByTo
@@ -105,6 +116,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/students'
     | '/api/chat'
+    | '/docs/build-a-todo-app-with-codemind'
     | '/'
     | '/p/$projectId/$threadId'
     | '/p/$projectId'
@@ -115,6 +127,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/students'
     | '/api/chat'
+    | '/docs/build-a-todo-app-with-codemind'
     | '/_authenticated/'
     | '/_authenticated/p/$projectId/$threadId'
     | '/_authenticated/p/$projectId/'
@@ -126,6 +139,7 @@ export interface RootRouteChildren {
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   StudentsRoute: typeof StudentsRoute
   ApiChatRoute: typeof ApiChatRoute
+  DocsBuildATodoAppWithCodemindRoute: typeof DocsBuildATodoAppWithCodemindRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -164,6 +178,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/docs/build-a-todo-app-with-codemind': {
+      id: '/docs/build-a-todo-app-with-codemind'
+      path: '/docs/build-a-todo-app-with-codemind'
+      fullPath: '/docs/build-a-todo-app-with-codemind'
+      preLoaderRoute: typeof DocsBuildATodoAppWithCodemindRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/chat': {
       id: '/api/chat'
@@ -210,7 +231,18 @@ const rootRouteChildren: RootRouteChildren = {
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   StudentsRoute: StudentsRoute,
   ApiChatRoute: ApiChatRoute,
+  DocsBuildATodoAppWithCodemindRoute: DocsBuildATodoAppWithCodemindRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
