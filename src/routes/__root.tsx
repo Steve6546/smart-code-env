@@ -77,18 +77,28 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Code Companion Pro is an AI-powered full-stack code editor for efficient software development." },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Code Companion Pro is an AI-powered full-stack code editor for efficient software development." },
+      { title: "CodeMind — AI Pair-Programmer for Any Project" },
+      {
+        name: "description",
+        content:
+          "CodeMind is an AI-powered full-stack code editor that reads, patches, and refactors your files in real time.",
+      },
+      { name: "author", content: "CodeMind" },
+      { property: "og:site_name", content: "CodeMind" },
+      { property: "og:title", content: "CodeMind — AI Pair-Programmer for Any Project" },
+      {
+        property: "og:description",
+        content:
+          "Build, edit, and ship code with an AI that thinks first — CodeMind reads, patches, and refactors your files in real time.",
+      },
       { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
-      { name: "twitter:title", content: "Lovable App" },
-      { name: "twitter:description", content: "Code Companion Pro is an AI-powered full-stack code editor for efficient software development." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/ebd0c28e-5846-4c33-95d3-e25fe9a85dc9/id-preview-e98f5c81--8889d058-0c07-4a57-a2b6-e93f988dfcdb.lovable.app-1780604008005.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/ebd0c28e-5846-4c33-95d3-e25fe9a85dc9/id-preview-e98f5c81--8889d058-0c07-4a57-a2b6-e93f988dfcdb.lovable.app-1780604008005.png" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "CodeMind — AI Pair-Programmer for Any Project" },
+      {
+        name: "twitter:description",
+        content:
+          "Build, edit, and ship code with an AI that thinks first — CodeMind reads, patches, and refactors your files in real time.",
+      },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
@@ -97,6 +107,19 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap",
+      },
+    ],
+    scripts: [
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "WebSite",
+          name: "CodeMind",
+          url: "https://smart-code-env.lovable.app",
+          description:
+            "AI-powered full-stack code editor that reads, patches, and refactors your files in real time.",
+        }),
       },
     ],
   }),

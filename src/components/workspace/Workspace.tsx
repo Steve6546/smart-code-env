@@ -166,18 +166,24 @@ export function Workspace({ projectId, threadId }: { projectId: string; threadId
     <div className="flex h-[100dvh] flex-col bg-background text-foreground">
       <header className="flex h-12 flex-shrink-0 items-center justify-between border-b border-border bg-card px-3 sm:px-4">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <Link to="/" className="flex items-center gap-2 text-muted-foreground hover:text-foreground">
+          <Link
+            to="/"
+            aria-label="Back to projects"
+            className="flex items-center gap-2 text-muted-foreground hover:text-foreground"
+          >
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
             <Code2 className="h-4 w-4" />
           </div>
           <span className="text-sm font-semibold truncate">CodeMind</span>
+          <h1 className="sr-only">CodeMind Workspace</h1>
         </div>
-        <Button variant="ghost" size="sm" onClick={signOut}>
+        <Button variant="ghost" size="sm" onClick={signOut} aria-label="Sign out">
           <LogOut className="h-4 w-4" />
         </Button>
       </header>
+      <main className="flex flex-1 min-h-0 flex-col">
 
       {/* Desktop / tablet: 3 resizable panels */}
       <div className="hidden md:flex flex-1 min-h-0">
@@ -242,6 +248,7 @@ export function Workspace({ projectId, threadId }: { projectId: string; threadId
           ))}
         </nav>
       </div>
+      </main>
     </div>
   );
 }
