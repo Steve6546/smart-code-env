@@ -248,6 +248,7 @@ export function Workspace({ projectId, threadId }: { projectId: string; threadId
           ))}
         </nav>
       </div>
+      </main>
     </div>
   );
 }
