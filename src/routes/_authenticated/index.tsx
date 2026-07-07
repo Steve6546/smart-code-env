@@ -145,6 +145,7 @@ function Dashboard() {
                   </p>
                 </Link>
                 <button
+                  aria-label={`Delete project ${p.name}`}
                   onClick={() => {
                     if (confirm(`Delete "${p.name}"?`)) delMut.mutate(p.id);
                   }}

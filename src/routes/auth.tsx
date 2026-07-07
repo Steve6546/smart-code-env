@@ -94,12 +94,12 @@ function AuthPage() {
           </div>
 
           <div className="space-y-6">
-            <h2 className="text-4xl font-bold leading-tight">
+            <h1 className="text-4xl font-bold leading-tight">
               Build, edit, and ship code
               <span className="block bg-gradient-to-r from-primary to-emerald-400 bg-clip-text text-transparent">
                 with an AI that thinks first.
               </span>
-            </h2>
+            </h1>
             <ul className="space-y-3 text-sm text-muted-foreground">
               <li className="flex items-start gap-3">
                 <Sparkles className="mt-0.5 h-4 w-4 text-primary" />
