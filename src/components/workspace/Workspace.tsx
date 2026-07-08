@@ -91,8 +91,45 @@ export function Workspace({ projectId, threadId }: { projectId: string; threadId
             ),
         },
       );
-    }, 600);
+    }, 1500);
   };
+
+  // Save immediately (Cmd/Ctrl+S) — flushes pending debounce.
+  const saveActiveNow = () => {
+    if (!activeId) return;
+    const t = tabs.find((x) => x.id === activeId);
+    if (!t) return;
+    if (saveTimers.current[activeId]) {
+      clearTimeout(saveTimers.current[activeId]);
+      delete saveTimers.current[activeId];
+    }
+    saveMut.mutate(
+      { id: t.id, content: t.content },
+      {
+        onSuccess: () => {
+          setTabs((prev) => prev.map((x) => (x.id === t.id ? { ...x, dirty: false } : x)));
+          toast.success("Saved", { duration: 1200 });
+        },
+      },
+    );
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+      if (e.key === "s" || e.key === "S") {
+        e.preventDefault();
+        saveActiveNow();
+      } else if (e.key === "p" || e.key === "P") {
+        e.preventDefault();
+        setQuickOpen((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId, tabs]);
 
   const applyAgentWrite = (path: string, content: string) => {
     setTabs((prev) =>
