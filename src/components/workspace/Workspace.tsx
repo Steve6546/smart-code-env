@@ -11,6 +11,8 @@ import { FileTree } from "./FileTree";
 import { EditorTabs } from "./EditorTabs";
 import { ChatPanel } from "./ChatPanel";
 import { ThreadList } from "./ThreadList";
+import { QuickOpen } from "./QuickOpen";
+import { toast } from "sonner";
 import {
   getFile,
   listFiles,
@@ -43,6 +45,7 @@ export function Workspace({ projectId, threadId }: { projectId: string; threadId
   const [tabs, setTabs] = useState<OpenTab[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [mobileView, setMobileView] = useState<MobileView>("chat");
+  const [quickOpen, setQuickOpen] = useState(false);
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const openFile = async (id: string) => {
