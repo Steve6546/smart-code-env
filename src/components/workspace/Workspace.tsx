@@ -218,11 +218,21 @@ export function Workspace({ projectId, threadId }: { projectId: string; threadId
           </div>
           <span className="text-sm font-semibold truncate">CodeMind</span>
           <h1 className="sr-only">CodeMind Workspace</h1>
+          <ConnectionDot
+            connected={!filesQuery.isError}
+            saving={saveMut.isPending}
+          />
         </div>
         <Button variant="ghost" size="sm" onClick={signOut} aria-label="Sign out">
           <LogOut className="h-4 w-4" />
         </Button>
       </header>
+      <QuickOpen
+        open={quickOpen}
+        onOpenChange={setQuickOpen}
+        files={filesQuery.data ?? []}
+        onOpen={openFile}
+      />
       <main className="flex flex-1 min-h-0 flex-col">
 
       {/* Desktop / tablet: 3 resizable panels */}
