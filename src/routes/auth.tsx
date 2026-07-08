@@ -23,7 +23,9 @@ export const Route = createFileRoute("/auth")({
         property: "og:description",
         content: "Open your AI-powered workspace and start building with CodeMind.",
       },
+      { property: "og:type", content: "website" },
       { property: "og:url", content: "https://smart-code-env.lovable.app/auth" },
+      { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "Sign in — CodeMind" },
       {
         name: "twitter:description",
