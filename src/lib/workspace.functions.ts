@@ -21,7 +21,7 @@ export const listProjects = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data, error } = await context.supabase
       .from("projects")
-      .select("id, name, updated_at")
+      .select("id, name, updated_at, created_at")
       .order("updated_at", { ascending: false });
     if (error) throw new Error(error.message);
     return data ?? [];
