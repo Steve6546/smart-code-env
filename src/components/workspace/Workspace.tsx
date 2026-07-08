@@ -11,6 +11,8 @@ import { FileTree } from "./FileTree";
 import { EditorTabs } from "./EditorTabs";
 import { ChatPanel } from "./ChatPanel";
 import { ThreadList } from "./ThreadList";
+import { QuickOpen } from "./QuickOpen";
+import { toast } from "sonner";
 import {
   getFile,
   listFiles,
@@ -43,6 +45,7 @@ export function Workspace({ projectId, threadId }: { projectId: string; threadId
   const [tabs, setTabs] = useState<OpenTab[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [mobileView, setMobileView] = useState<MobileView>("chat");
+  const [quickOpen, setQuickOpen] = useState(false);
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const openFile = async (id: string) => {
@@ -88,8 +91,45 @@ export function Workspace({ projectId, threadId }: { projectId: string; threadId
             ),
         },
       );
-    }, 600);
+    }, 1500);
   };
+
+  // Save immediately (Cmd/Ctrl+S) — flushes pending debounce.
+  const saveActiveNow = () => {
+    if (!activeId) return;
+    const t = tabs.find((x) => x.id === activeId);
+    if (!t) return;
+    if (saveTimers.current[activeId]) {
+      clearTimeout(saveTimers.current[activeId]);
+      delete saveTimers.current[activeId];
+    }
+    saveMut.mutate(
+      { id: t.id, content: t.content },
+      {
+        onSuccess: () => {
+          setTabs((prev) => prev.map((x) => (x.id === t.id ? { ...x, dirty: false } : x)));
+          toast.success("Saved", { duration: 1200 });
+        },
+      },
+    );
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+      if (e.key === "s" || e.key === "S") {
+        e.preventDefault();
+        saveActiveNow();
+      } else if (e.key === "p" || e.key === "P") {
+        e.preventDefault();
+        setQuickOpen((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId, tabs]);
 
   const applyAgentWrite = (path: string, content: string) => {
     setTabs((prev) =>
@@ -178,11 +218,21 @@ export function Workspace({ projectId, threadId }: { projectId: string; threadId
           </div>
           <span className="text-sm font-semibold truncate">CodeMind</span>
           <h1 className="sr-only">CodeMind Workspace</h1>
+          <ConnectionDot
+            connected={!filesQuery.isError}
+            saving={saveMut.isPending}
+          />
         </div>
         <Button variant="ghost" size="sm" onClick={signOut} aria-label="Sign out">
           <LogOut className="h-4 w-4" />
         </Button>
       </header>
+      <QuickOpen
+        open={quickOpen}
+        onOpenChange={setQuickOpen}
+        files={filesQuery.data ?? []}
+        onOpen={openFile}
+      />
       <main className="flex flex-1 min-h-0 flex-col">
 
       {/* Desktop / tablet: 3 resizable panels */}
@@ -250,5 +300,23 @@ export function Workspace({ projectId, threadId }: { projectId: string; threadId
       </div>
       </main>
     </div>
+  );
+}
+
+function ConnectionDot({ connected, saving }: { connected: boolean; saving: boolean }) {
+  const color = !connected
+    ? "bg-red-500"
+    : saving
+      ? "bg-amber-400 animate-pulse"
+      : "bg-emerald-500";
+  const label = !connected ? "Disconnected" : saving ? "Saving…" : "Connected";
+  return (
+    <span
+      className="ml-2 flex items-center gap-1.5 text-[10px] text-muted-foreground"
+      title={label}
+    >
+      <span className={`h-2 w-2 rounded-full ${color}`} />
+      <span className="hidden sm:inline">{label}</span>
+    </span>
   );
 }

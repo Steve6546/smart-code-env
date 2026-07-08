@@ -12,6 +12,13 @@ import { FileNodeIcon, FolderNodeIcon } from "./file-icons";
 import { createFile, deletePath, movePath } from "@/lib/workspace.functions";
 import { toast } from "sonner";
 import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -159,81 +166,143 @@ export function FileTree({
       const isActive = child.file?.id === activeFileId;
       const descendantCount = isFolder ? countDescendants(child) : 1;
 
+      const doRename = () => {
+        const np = prompt("Rename to", child.path);
+        if (np && np !== child.path) renameMut.mutate({ from: child.path, to: np });
+      };
+      const doDuplicate = () => {
+        if (isFolder) {
+          toast.error("Duplicating folders is not supported yet");
+          return;
+        }
+        const dot = child.path.lastIndexOf(".");
+        const dup =
+          dot > 0
+            ? `${child.path.slice(0, dot)}-copy${child.path.slice(dot)}`
+            : `${child.path}-copy`;
+        createMut.mutate({ path: dup });
+      };
+      const doCopyPath = async () => {
+        try {
+          await navigator.clipboard.writeText(child.path);
+          toast.success("Path copied");
+        } catch {
+          toast.error("Could not copy path");
+        }
+      };
+
       return (
         <div key={child.path}>
-          <div
-            className={`group flex items-center gap-1 rounded px-1.5 py-0.5 text-xs hover:bg-accent ${
-              isActive ? "bg-accent text-accent-foreground" : ""
-            }`}
-            style={{ paddingLeft: 6 + depth * 12 }}
-          >
-            {isFolder ? (
-              <button onClick={() => toggle(child.path)} className="flex items-center gap-1 flex-1 min-w-0">
-                {isOpen ? (
-                  <ChevronDown className="h-3 w-3 flex-shrink-0" />
-                ) : (
-                  <ChevronRight className="h-3 w-3 flex-shrink-0" />
-                )}
-                <FolderNodeIcon open={isOpen} />
-                <span className="truncate">{child.name}</span>
-              </button>
-            ) : (
-              <button
-                onClick={() => child.file && onOpen(child.file.id)}
-                className="flex items-center gap-1 flex-1 min-w-0"
+          <ContextMenu>
+            <ContextMenuTrigger asChild>
+              <div
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData("text/plain", child.path);
+                  e.dataTransfer.effectAllowed = "move";
+                }}
+                onDragOver={(e) => {
+                  if (!isFolder) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                }}
+                onDrop={(e) => {
+                  if (!isFolder) return;
+                  e.preventDefault();
+                  const from = e.dataTransfer.getData("text/plain");
+                  if (!from || from === child.path) return;
+                  if (child.path === from || child.path.startsWith(from + "/")) return;
+                  const name = from.split("/").pop() ?? from;
+                  const to = `${child.path}/${name}`;
+                  if (to === from) return;
+                  renameMut.mutate({ from, to });
+                }}
+                className={`group flex items-center gap-1 rounded px-1.5 py-0.5 text-xs hover:bg-accent ${
+                  isActive ? "bg-accent text-accent-foreground" : ""
+                }`}
+                style={{ paddingLeft: 6 + depth * 12 }}
               >
-                <span className="w-3" />
-                <FileNodeIcon name={child.name} />
-                <span className="truncate">{child.name}</span>
-              </button>
-            )}
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  className="rounded p-0.5 opacity-0 group-hover:opacity-100 hover:bg-background"
-                  onClick={(e) => e.stopPropagation()}
-                  title="More"
-                >
-                  <MoreVertical className="h-3 w-3" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44">
-                {isFolder && (
-                  <>
-                    <DropdownMenuItem onClick={() => newFileAt(child.path)}>🆕 New File</DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => newFolderAt(child.path)}>📁 New Folder</DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                  </>
+                {isFolder ? (
+                  <button onClick={() => toggle(child.path)} className="flex items-center gap-1 flex-1 min-w-0">
+                    {isOpen ? (
+                      <ChevronDown className="h-3 w-3 flex-shrink-0" />
+                    ) : (
+                      <ChevronRight className="h-3 w-3 flex-shrink-0" />
+                    )}
+                    <FolderNodeIcon open={isOpen} />
+                    <span className="truncate">{child.name}</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => child.file && onOpen(child.file.id)}
+                    className="flex items-center gap-1 flex-1 min-w-0"
+                  >
+                    <span className="w-3" />
+                    <FileNodeIcon name={child.name} />
+                    <span className="truncate">{child.name}</span>
+                  </button>
                 )}
-                <DropdownMenuItem
-                  onClick={() => {
-                    const np = prompt("Rename to", child.path);
-                    if (np && np !== child.path) renameMut.mutate({ from: child.path, to: np });
-                  }}
-                >
-                  ✏️ Rename
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => {
-                    const np = prompt("Move to (new path)", child.path);
-                    if (np && np !== child.path) renameMut.mutate({ from: child.path, to: np });
-                  }}
-                >
-                  📦 Move
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
-                  onClick={() =>
-                    setPendingDelete({ path: child.path, isFolder: !!isFolder, count: descendantCount })
-                  }
-                >
-                  🗑️ Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      className="rounded p-0.5 opacity-0 group-hover:opacity-100 hover:bg-background"
+                      onClick={(e) => e.stopPropagation()}
+                      title="More"
+                    >
+                      <MoreVertical className="h-3 w-3" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-44">
+                    {isFolder && (
+                      <>
+                        <DropdownMenuItem onClick={() => newFileAt(child.path)}>🆕 New File</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => newFolderAt(child.path)}>📁 New Folder</DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                      </>
+                    )}
+                    <DropdownMenuItem onClick={doRename}>✏️ Rename</DropdownMenuItem>
+                    {!isFolder && (
+                      <DropdownMenuItem onClick={doDuplicate}>📄 Duplicate</DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem onClick={doCopyPath}>🔗 Copy path</DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      onClick={() =>
+                        setPendingDelete({ path: child.path, isFolder: !!isFolder, count: descendantCount })
+                      }
+                    >
+                      🗑️ Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </ContextMenuTrigger>
+            <ContextMenuContent className="w-48">
+              {isFolder && (
+                <>
+                  <ContextMenuItem onClick={() => newFileAt(child.path)}>New file</ContextMenuItem>
+                  <ContextMenuItem onClick={() => newFolderAt(child.path)}>New folder</ContextMenuItem>
+                  <ContextMenuSeparator />
+                </>
+              )}
+              <ContextMenuItem onClick={doRename}>Rename</ContextMenuItem>
+              {!isFolder && (
+                <ContextMenuItem onClick={doDuplicate}>Duplicate</ContextMenuItem>
+              )}
+              <ContextMenuItem onClick={doCopyPath}>Copy path</ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={() =>
+                  setPendingDelete({ path: child.path, isFolder: !!isFolder, count: descendantCount })
+                }
+              >
+                Delete
+              </ContextMenuItem>
+            </ContextMenuContent>
+          </ContextMenu>
           {isFolder && isOpen && renderNode(child, depth + 1)}
         </div>
       );
