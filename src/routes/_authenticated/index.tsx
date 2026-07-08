@@ -23,6 +23,25 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/")({
   component: Dashboard,
+  head: () => ({
+    meta: [
+      { title: "Your projects — CodeMind dashboard" },
+      {
+        name: "description",
+        content:
+          "Manage your CodeMind AI workspaces: create new projects, open recent ones, and pick up where you left off.",
+      },
+      { name: "robots", content: "noindex, nofollow" },
+      { property: "og:title", content: "Your projects — CodeMind dashboard" },
+      {
+        property: "og:description",
+        content: "Manage your CodeMind AI workspaces and open a project to keep building.",
+      },
+      { property: "og:type", content: "website" },
+      { property: "og:url", content: "https://smart-code-env.lovable.app/" },
+    ],
+    links: [{ rel: "canonical", href: "https://smart-code-env.lovable.app/" }],
+  }),
 });
 
 function Dashboard() {

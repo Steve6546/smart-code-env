@@ -92,6 +92,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           "Build, edit, and ship code with an AI that thinks first — CodeMind reads, patches, and refactors your files in real time.",
       },
       { property: "og:type", content: "website" },
+      { property: "og:url", content: "https://smart-code-env.lovable.app" },
+      { property: "og:image", content: "https://smart-code-env.lovable.app/og-default.png" },
+      { name: "twitter:image", content: "https://smart-code-env.lovable.app/og-default.png" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "CodeMind — AI Pair-Programmer for Any Project" },
       {
