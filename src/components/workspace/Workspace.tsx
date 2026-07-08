@@ -302,3 +302,21 @@ export function Workspace({ projectId, threadId }: { projectId: string; threadId
     </div>
   );
 }
+
+function ConnectionDot({ connected, saving }: { connected: boolean; saving: boolean }) {
+  const color = !connected
+    ? "bg-red-500"
+    : saving
+      ? "bg-amber-400 animate-pulse"
+      : "bg-emerald-500";
+  const label = !connected ? "Disconnected" : saving ? "Saving…" : "Connected";
+  return (
+    <span
+      className="ml-2 flex items-center gap-1.5 text-[10px] text-muted-foreground"
+      title={label}
+    >
+      <span className={`h-2 w-2 rounded-full ${color}`} />
+      <span className="hidden sm:inline">{label}</span>
+    </span>
+  );
+}
