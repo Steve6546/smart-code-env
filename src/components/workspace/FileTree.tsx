@@ -12,6 +12,13 @@ import { FileNodeIcon, FolderNodeIcon } from "./file-icons";
 import { createFile, deletePath, movePath } from "@/lib/workspace.functions";
 import { toast } from "sonner";
 import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
