@@ -479,6 +479,38 @@ ${fileContext}`;
                   content: touched.slice(0, 20).join("; "),
                 });
               }
+
+              // Auto-title the thread from the first user message (cheap LLM call).
+              try {
+                const { data: threadRow } = await supabase
+                  .from("chat_threads")
+                  .select("auto_titled, title")
+                  .eq("id", threadId)
+                  .maybeSingle();
+                if (threadRow && !threadRow.auto_titled) {
+                  const firstUser = messages.find((m) => m.role === "user");
+                  const firstText = firstUser?.parts
+                    ?.map((p) => (p.type === "text" ? p.text : ""))
+                    .join(" ")
+                    .trim()
+                    .slice(0, 500);
+                  if (firstText) {
+                    const { text } = await generateText({
+                      model: gateway("google/gemini-3.5-flash"),
+                      prompt: `Give a concise 3–6 word title (no quotes, no punctuation at ends, same language as the message) for this chat:\n\n${firstText}`,
+                    });
+                    const clean = text.trim().replace(/^["'`]+|["'`]+$/g, "").slice(0, 80);
+                    if (clean) {
+                      await supabase
+                        .from("chat_threads")
+                        .update({ title: clean, auto_titled: true })
+                        .eq("id", threadId);
+                    }
+                  }
+                }
+              } catch (e) {
+                console.error("auto-title failed", e);
+              }
             } catch (e) {
               console.error("persist assistant failed", e);
             }
