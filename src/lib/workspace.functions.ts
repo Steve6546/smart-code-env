@@ -255,7 +255,11 @@ export const updateThread = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ context, data }) => {
-    const patch: Record<string, unknown> = {};
+    const patch: {
+      title?: string;
+      auto_titled?: boolean;
+      pinned?: boolean;
+    } = {};
     if (data.title !== undefined) {
       patch.title = data.title;
       patch.auto_titled = true;
