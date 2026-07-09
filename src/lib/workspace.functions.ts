@@ -216,8 +216,9 @@ export const listThreads = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const { data: t, error } = await context.supabase
       .from("chat_threads")
-      .select("id, title, updated_at")
+      .select("id, title, updated_at, created_at, pinned, auto_titled")
       .eq("project_id", data.projectId)
+      .order("pinned", { ascending: false })
       .order("updated_at", { ascending: false });
     if (error) throw new Error(error.message);
     return t ?? [];
@@ -236,10 +237,37 @@ export const createThread = createServerFn({ method: "POST" })
         user_id: context.userId,
         title: data.title ?? "New chat",
       })
-      .select("id, title, updated_at")
+      .select("id, title, updated_at, created_at, pinned, auto_titled")
       .single();
     if (error) throw new Error(error.message);
     return t;
+  });
+
+export const updateThread = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        title: z.string().min(1).max(200).optional(),
+        pinned: z.boolean().optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    const patch: Record<string, unknown> = {};
+    if (data.title !== undefined) {
+      patch.title = data.title;
+      patch.auto_titled = true;
+    }
+    if (data.pinned !== undefined) patch.pinned = data.pinned;
+    if (Object.keys(patch).length === 0) return { ok: true };
+    const { error } = await context.supabase
+      .from("chat_threads")
+      .update(patch)
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });
 
 export const deleteThread = createServerFn({ method: "POST" })
