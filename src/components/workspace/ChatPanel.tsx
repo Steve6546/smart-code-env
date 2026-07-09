@@ -357,6 +357,15 @@ export function ChatPanel({
   // After that, agent activity is rendered INSIDE the assistant bubble via <AgentActivity/>.
   const showThinking = status === "submitted" || (isLoading && lastMsg?.role !== "assistant");
 
+  // When a stream finishes, refresh the thread list so auto-generated titles appear.
+  const prevStatusRef = useRef(status);
+  useEffect(() => {
+    if (prevStatusRef.current === "streaming" && status === "ready") {
+      qc.invalidateQueries({ queryKey: ["threads", projectId] });
+    }
+    prevStatusRef.current = status;
+  }, [status, qc, projectId]);
+
   const submit = async () => {
     const text = input.trim();
     if (!text || isLoading) return;
