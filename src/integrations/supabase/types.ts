@@ -51,24 +51,30 @@ export type Database = {
       }
       chat_threads: {
         Row: {
+          auto_titled: boolean
           created_at: string
           id: string
+          pinned: boolean
           project_id: string
           title: string
           updated_at: string
           user_id: string
         }
         Insert: {
+          auto_titled?: boolean
           created_at?: string
           id?: string
+          pinned?: boolean
           project_id: string
           title?: string
           updated_at?: string
           user_id: string
         }
         Update: {
+          auto_titled?: boolean
           created_at?: string
           id?: string
+          pinned?: boolean
           project_id?: string
           title?: string
           updated_at?: string
