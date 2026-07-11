@@ -65,6 +65,23 @@ export const Route = createFileRoute("/_authenticated/")({
 
 const NAME_RE = /^[a-zA-Z0-9 _.\-]+$/;
 
+function hashString(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+function projectGradient(name: string): string {
+  const h = hashString(name);
+  const a = h % 360;
+  const b = (a + 40 + (h % 60)) % 360;
+  return `linear-gradient(135deg, hsl(${a} 70% 45%), hsl(${b} 65% 35%))`;
+}
+function projectInitials(name: string): string {
+  const parts = name.trim().split(/[\s_\-.]+/).filter(Boolean);
+  const s = (parts[0]?.[0] ?? "?") + (parts[1]?.[0] ?? "");
+  return s.toUpperCase().slice(0, 2);
+}
+
 function Dashboard() {
   const navigate = useNavigate();
   const router = useRouter();
