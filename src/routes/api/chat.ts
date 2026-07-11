@@ -336,20 +336,82 @@ export const Route = createFileRoute("/api/chat")({
               .join("\n\n")
           : "(no files currently open)";
 
-        // Load durable project memory (past agent actions / goals)
+        // --- Project memory: labelled key/value facts (AGENTS-style) ---
+        const { data: kvRows } = await supabase
+          .from("project_memory")
+          .select("key, content")
+          .eq("project_id", projectId)
+          .eq("kind", "kv")
+          .not("key", "is", null)
+          .order("updated_at", { ascending: false })
+          .limit(50);
+        const kvBlock = kvRows && kvRows.length
+          ? kvRows.map((r) => `- ${r.key}: ${r.content}`).join("\n")
+          : "(no key/value memory yet)";
+
+        // --- Recent agent-action memory ---
         const { data: memoryRows } = await supabase
           .from("project_memory")
           .select("kind, content, created_at")
           .eq("project_id", projectId)
+          .in("kind", ["actions", "note"])
           .order("created_at", { ascending: false })
-          .limit(25);
+          .limit(15);
         const memoryBlock = memoryRows && memoryRows.length
           ? memoryRows
               .slice()
               .reverse()
               .map((r) => `- [${r.kind}] ${r.content}`)
               .join("\n")
-          : "(no prior memory yet)";
+          : "(no prior action memory yet)";
+
+        // --- AGENTS.md hierarchical injection ---
+        // Load every AGENTS.md in the project, then pick the ones nearest to the
+        // directories of currently-open files (deepest first). Root AGENTS.md is
+        // always included when present.
+        const { data: agentDocs } = await supabase
+          .from("files")
+          .select("path, content")
+          .eq("project_id", projectId)
+          .eq("is_folder", false)
+          .ilike("path", "%AGENTS.md");
+        const focusDirs = (openFiles.length ? openFiles.map((f) => f.path) : allFilePaths.slice(0, 5))
+          .map((p) => p.split("/").slice(0, -1).join("/"));
+        const pickedAgents: { path: string; content: string }[] = [];
+        for (const doc of agentDocs ?? []) {
+          const dir = doc.path.split("/").slice(0, -1).join("/");
+          const relevant =
+            dir === "" ||
+            focusDirs.some((fd) => fd === dir || fd.startsWith(dir + "/"));
+          if (relevant) pickedAgents.push({ path: doc.path, content: doc.content });
+        }
+        pickedAgents.sort((a, b) => b.path.length - a.path.length);
+        const agentsBlock = pickedAgents.length
+          ? pickedAgents
+              .slice(0, 5)
+              .map((d) => `--- ${d.path} ---\n${d.content.slice(0, 4000)}`)
+              .join("\n\n")
+          : "(no AGENTS.md files in this project)";
+
+        // --- Context compaction: if the conversation is long, use a stored
+        // summary (regenerated in onFinish) instead of replaying old turns. ---
+        let modelMessages = messages;
+        let summaryNote = "";
+        if (messages.length > 30) {
+          const { data: summaryRow } = await supabase
+            .from("project_memory")
+            .select("content")
+            .eq("project_id", projectId)
+            .eq("thread_id", threadId)
+            .eq("kind", "summary")
+            .order("updated_at", { ascending: false })
+            .maybeSingle();
+          const keepTail = 12;
+          modelMessages = messages.slice(-keepTail);
+          summaryNote = summaryRow?.content
+            ? `\n\n# Conversation so far (summarised)\n${summaryRow.content}`
+            : "";
+        }
 
         const system = `You are CodeMind — a senior software engineer working directly inside the user's project.
 
@@ -377,8 +439,14 @@ export const Route = createFileRoute("/api/chat")({
 # Tools
 read_file, list_files, grep | write_file, edit_file, create_folder, rename_file, move_path | delete_file, delete_path (explicit confirmation only). Every write is auto-snapshotted; the user can roll back.
 
-# Project memory (recent)
-${memoryBlock}
+# Project memory (key/value facts — authoritative)
+${kvBlock}
+
+# AGENTS.md (project + nearest folders)
+${agentsBlock}
+
+# Recent agent actions
+${memoryBlock}${summaryNote}
 
 # All files
 ${allFilePaths.length ? allFilePaths.slice(0, 400).map((p) => `  - ${p}`).join("\n") : "  (empty)"}
@@ -390,7 +458,7 @@ ${fileContext}`;
         const result = streamText({
           model,
           system,
-          messages: await convertToModelMessages(messages),
+          messages: await convertToModelMessages(modelMessages),
           tools: makeTools(supabase, userId, projectId, threadId, snapshots),
           stopWhen: stepCountIs(50),
         });
