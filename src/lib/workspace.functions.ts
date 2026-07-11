@@ -312,12 +312,68 @@ export const listMemory = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const { data: rows, error } = await context.supabase
       .from("project_memory")
-      .select("id, kind, content, created_at")
+      .select("id, kind, key, content, created_at, updated_at")
       .eq("project_id", data.projectId)
-      .order("created_at", { ascending: false })
-      .limit(50);
+      .order("updated_at", { ascending: false })
+      .limit(200);
     if (error) throw new Error(error.message);
     return rows ?? [];
+  });
+
+const MEMORY_KEY_RE = /^[a-zA-Z0-9_.\-]+$/;
+
+export const upsertMemory = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        projectId: z.string().uuid(),
+        key: z.string().min(1).max(80).regex(MEMORY_KEY_RE),
+        content: z.string().min(1).max(20000),
+        kind: z.string().min(1).max(40).optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    const { data: existing } = await context.supabase
+      .from("project_memory")
+      .select("id")
+      .eq("project_id", data.projectId)
+      .eq("key", data.key)
+      .maybeSingle();
+    if (existing) {
+      const { error } = await context.supabase
+        .from("project_memory")
+        .update({ content: data.content, kind: data.kind ?? "kv" })
+        .eq("id", existing.id);
+      if (error) throw new Error(error.message);
+      return { id: existing.id, updated: true };
+    }
+    const { data: inserted, error } = await context.supabase
+      .from("project_memory")
+      .insert({
+        project_id: data.projectId,
+        user_id: context.userId,
+        key: data.key,
+        kind: data.kind ?? "kv",
+        content: data.content,
+      })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    return { id: inserted.id, updated: false };
+  });
+
+export const deleteMemory = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ context, data }) => {
+    const { error } = await context.supabase
+      .from("project_memory")
+      .delete()
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });
 
 export const listMessages = createServerFn({ method: "POST" })
