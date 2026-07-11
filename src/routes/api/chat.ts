@@ -548,6 +548,59 @@ ${fileContext}`;
                 });
               }
 
+              // --- Context compaction: refresh the thread summary after every
+              // turn once the conversation exceeds ~30 messages. Stored in
+              // project_memory so future turns can drop old messages.
+              try {
+                const totalMessages = messages.length + 1; // +1 for assistant just written
+                if (totalMessages > 30) {
+                  const olderCutoff = messages.slice(0, Math.max(0, messages.length - 12));
+                  const olderText = olderCutoff
+                    .map((m) => {
+                      const t = m.parts
+                        ?.map((p) => (p.type === "text" ? p.text : ""))
+                        .join(" ")
+                        .trim();
+                      return t ? `${m.role.toUpperCase()}: ${t.slice(0, 800)}` : "";
+                    })
+                    .filter(Boolean)
+                    .join("\n")
+                    .slice(0, 12000);
+                  if (olderText) {
+                    const { text: summary } = await generateText({
+                      model: gateway("google/gemini-3.5-flash"),
+                      prompt: `Summarise the following chat between a developer and an AI coding assistant. Preserve: user goals, key decisions, file paths touched, unresolved issues, and any hard constraints. Use bullet points. Keep under 250 words.\n\n${olderText}`,
+                    });
+                    const clean = summary.trim().slice(0, 4000);
+                    if (clean) {
+                      const { data: existing } = await supabase
+                        .from("project_memory")
+                        .select("id")
+                        .eq("project_id", projectId)
+                        .eq("thread_id", threadId)
+                        .eq("kind", "summary")
+                        .maybeSingle();
+                      if (existing) {
+                        await supabase
+                          .from("project_memory")
+                          .update({ content: clean })
+                          .eq("id", existing.id);
+                      } else {
+                        await supabase.from("project_memory").insert({
+                          project_id: projectId,
+                          user_id: userId,
+                          thread_id: threadId,
+                          kind: "summary",
+                          content: clean,
+                        });
+                      }
+                    }
+                  }
+                }
+              } catch (e) {
+                console.error("compaction failed", e);
+              }
+
               // Auto-title the thread from the first user message (cheap LLM call).
               try {
                 const { data: threadRow } = await supabase
