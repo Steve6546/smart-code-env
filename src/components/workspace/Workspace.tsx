@@ -12,6 +12,7 @@ import { EditorTabs } from "./EditorTabs";
 import { ChatPanel } from "./ChatPanel";
 import { ThreadList } from "./ThreadList";
 import { QuickOpen } from "./QuickOpen";
+import { MemoryDialog } from "./MemoryDialog";
 import { toast } from "sonner";
 import {
   getFile,
@@ -223,9 +224,12 @@ export function Workspace({ projectId, threadId }: { projectId: string; threadId
             saving={saveMut.isPending}
           />
         </div>
-        <Button variant="ghost" size="sm" onClick={signOut} aria-label="Sign out">
-          <LogOut className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <MemoryDialog projectId={projectId} />
+          <Button variant="ghost" size="sm" onClick={signOut} aria-label="Sign out">
+            <LogOut className="h-4 w-4" />
+          </Button>
+        </div>
       </header>
       <QuickOpen
         open={quickOpen}
