@@ -65,6 +65,23 @@ export const Route = createFileRoute("/_authenticated/")({
 
 const NAME_RE = /^[a-zA-Z0-9 _.\-]+$/;
 
+function hashString(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+function projectGradient(name: string): string {
+  const h = hashString(name);
+  const a = h % 360;
+  const b = (a + 40 + (h % 60)) % 360;
+  return `linear-gradient(135deg, hsl(${a} 70% 45%), hsl(${b} 65% 35%))`;
+}
+function projectInitials(name: string): string {
+  const parts = name.trim().split(/[\s_\-.]+/).filter(Boolean);
+  const s = (parts[0]?.[0] ?? "?") + (parts[1]?.[0] ?? "");
+  return s.toUpperCase().slice(0, 2);
+}
+
 function Dashboard() {
   const navigate = useNavigate();
   const router = useRouter();
@@ -260,8 +277,14 @@ function Dashboard() {
                   params={{ projectId: p.id }}
                   className="block"
                 >
-                  <div className="mb-3 flex h-20 items-center justify-center rounded-md bg-gradient-to-br from-primary/10 to-primary/5">
-                    <FolderGit2 className="h-8 w-8 text-primary/70" />
+                  <div
+                    className="mb-3 flex h-20 items-center justify-center rounded-md"
+                    style={{ background: projectGradient(p.name) }}
+                    aria-hidden
+                  >
+                    <span className="text-2xl font-bold text-white/90 drop-shadow-sm">
+                      {projectInitials(p.name)}
+                    </span>
                   </div>
                   <div className="mb-1 flex items-center gap-2">
                     <span className="truncate font-medium">{p.name}</span>
