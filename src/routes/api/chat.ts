@@ -206,7 +206,7 @@ function makeTools(
     }),
     edit_file: tool({
       description:
-        "Apply a precise string replacement to an existing file. Use this for SMALL/TARGETED edits instead of rewriting the whole file. `find` must occur exactly once in the file — include enough surrounding context to be unique. For larger rewrites, use write_file instead.",
+        "Apply a precise string replacement to an existing file (apply_patch). Use for SMALL/TARGETED edits — never rewrite the whole file. `find` must uniquely identify ONE location (include surrounding context). Matching is tried in 3 passes: (1) literal, (2) normalised line-endings, (3) whitespace-insensitive. If nothing matches or more than one match is found, the call fails without changing the file — read_file again and retry with more context.",
       inputSchema: z.object({
         path: z.string(),
         find: z.string().min(1),
@@ -224,19 +224,70 @@ function makeTools(
           .maybeSingle();
         if (ferr) return { ok: false, error: ferr.message };
         if (!file) return { ok: false, error: "File not found" };
-        const idx = file.content.indexOf(find);
-        if (idx === -1) return { ok: false, error: "`find` string not found in file" };
-        if (file.content.indexOf(find, idx + find.length) !== -1)
-          return { ok: false, error: "`find` matches multiple times — add more surrounding context" };
-        const next = file.content.slice(0, idx) + replace + file.content.slice(idx + find.length);
+
+        const original: string = file.content;
+        const applyLiteral = (): string | { error: string } => {
+          const idx = original.indexOf(find);
+          if (idx === -1) return { error: "no_match" };
+          if (original.indexOf(find, idx + find.length) !== -1)
+            return { error: "multiple_matches" };
+          return original.slice(0, idx) + replace + original.slice(idx + find.length);
+        };
+        const normEol = (s: string) => s.replace(/\r\n/g, "\n");
+        const applyEol = (): string | { error: string } => {
+          const src = normEol(original);
+          const needle = normEol(find);
+          const idx = src.indexOf(needle);
+          if (idx === -1) return { error: "no_match" };
+          if (src.indexOf(needle, idx + needle.length) !== -1)
+            return { error: "multiple_matches" };
+          return src.slice(0, idx) + normEol(replace) + src.slice(idx + needle.length);
+        };
+        const applyWs = (): string | { error: string } => {
+          // Whitespace-insensitive match: build a regex from `find` that treats
+          // any run of whitespace as \s+, then replace exactly one match.
+          const escaped = find
+            .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+            .replace(/\s+/g, "\\s+");
+          const re = new RegExp(escaped, "g");
+          const matches = original.match(re);
+          if (!matches || matches.length === 0) return { error: "no_match" };
+          if (matches.length > 1) return { error: "multiple_matches" };
+          return original.replace(re, () => replace);
+        };
+
+        let next: string | null = null;
+        let strategy = "literal";
+        for (const [name, fn] of [
+          ["literal", applyLiteral],
+          ["normalized-eol", applyEol],
+          ["whitespace-insensitive", applyWs],
+        ] as const) {
+          const r = fn();
+          if (typeof r === "string") {
+            next = r;
+            strategy = name;
+            break;
+          }
+          if (r.error === "multiple_matches") {
+            return {
+              ok: false,
+              error: `\`find\` matches multiple times (${name}) — add more surrounding context`,
+            };
+          }
+        }
+        if (next === null)
+          return { ok: false, error: "`find` not found in file (tried literal, EOL-normalised, and whitespace-insensitive matching). Re-read the file and try again with more context." };
+
         const { error: uerr } = await supabase
           .from("files")
           .update({ content: next })
           .eq("id", file.id);
         if (uerr) return { ok: false, error: uerr.message };
-        return { ok: true, action: "updated", path };
+        return { ok: true, action: "updated", path, strategy };
       },
     }),
+
     list_files: tool({
       description: "List all files and folders in the current project.",
       inputSchema: z.object({}),
