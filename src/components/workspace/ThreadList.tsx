@@ -236,6 +236,19 @@ export function ThreadList({
                 <Pencil className="h-3 w-3" />
               </button>
               <button
+                onClick={() =>
+                  updateMut.mutate({ id: t.id, archived: !t.archived, pinned: false })
+                }
+                className="p-0.5 hover:text-foreground"
+                title={t.archived ? "Unarchive" : "Archive"}
+              >
+                {t.archived ? (
+                  <ArchiveRestore className="h-3 w-3" />
+                ) : (
+                  <Archive className="h-3 w-3" />
+                )}
+              </button>
+              <button
                 onClick={() => setPendingDelete(t)}
                 className="p-0.5 hover:text-destructive"
                 title="Delete"
@@ -243,6 +256,7 @@ export function ThreadList({
                 <Trash2 className="h-3 w-3" />
               </button>
             </div>
+
           </>
         )}
       </div>
