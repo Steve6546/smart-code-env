@@ -86,9 +86,12 @@ export function ThreadList({
   const [renameValue, setRenameValue] = useState("");
   const [pendingDelete, setPendingDelete] = useState<Thread | null>(null);
 
+  const [showArchived, setShowArchived] = useState(false);
+
   const { data: threads = [] } = useQuery({
-    queryKey: ["threads", projectId],
-    queryFn: () => listFn({ data: { projectId } }) as Promise<Thread[]>,
+    queryKey: ["threads", projectId, showArchived],
+    queryFn: () =>
+      listFn({ data: { projectId, includeArchived: showArchived } }) as Promise<Thread[]>,
   });
 
   const invalidate = () =>
@@ -109,8 +112,9 @@ export function ThreadList({
     mutationFn: (id: string) => deleteFn({ data: { id } }),
     onSuccess: async () => {
       const res = (await qc.fetchQuery({
-        queryKey: ["threads", projectId],
-        queryFn: () => listFn({ data: { projectId } }) as Promise<Thread[]>,
+        queryKey: ["threads", projectId, false],
+        queryFn: () =>
+          listFn({ data: { projectId, includeArchived: false } }) as Promise<Thread[]>,
       })) as Thread[];
       invalidate();
       if (res[0]) {
@@ -125,7 +129,7 @@ export function ThreadList({
   });
 
   const updateMut = useMutation({
-    mutationFn: (v: { id: string; title?: string; pinned?: boolean }) =>
+    mutationFn: (v: { id: string; title?: string; pinned?: boolean; archived?: boolean }) =>
       updateFn({ data: v }),
     onSuccess: invalidate,
   });
@@ -136,10 +140,13 @@ export function ThreadList({
     return threads.filter((t) => t.title.toLowerCase().includes(q));
   }, [threads, query]);
 
-  const pinned = filtered.filter((t) => t.pinned);
-  const rest = filtered.filter((t) => !t.pinned);
+  const active = filtered.filter((t) => !t.archived);
+  const archived = filtered.filter((t) => t.archived);
+  const pinned = active.filter((t) => t.pinned);
+  const rest = active.filter((t) => !t.pinned);
   const byBucket: Record<string, Thread[]> = { today: [], yesterday: [], week: [], older: [] };
   for (const t of rest) byBucket[bucketOf(t.updated_at)].push(t);
+
 
   const commitRename = (id: string) => {
     const v = renameValue.trim();
