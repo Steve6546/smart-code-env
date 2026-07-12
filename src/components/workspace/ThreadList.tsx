@@ -2,7 +2,18 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { MessageSquarePlus, Trash2, Search, Pin, PinOff, Pencil, Check, X } from "lucide-react";
+import {
+  MessageSquarePlus,
+  Trash2,
+  Search,
+  Pin,
+  PinOff,
+  Pencil,
+  Check,
+  X,
+  Archive,
+  ArchiveRestore,
+} from "lucide-react";
 import {
   createThread,
   deleteThread,
@@ -27,7 +38,9 @@ type Thread = {
   created_at: string;
   pinned: boolean;
   auto_titled: boolean;
+  archived: boolean;
 };
+
 
 const DAY = 86_400_000;
 function bucketOf(iso: string): "today" | "yesterday" | "week" | "older" {
@@ -73,9 +86,12 @@ export function ThreadList({
   const [renameValue, setRenameValue] = useState("");
   const [pendingDelete, setPendingDelete] = useState<Thread | null>(null);
 
+  const [showArchived, setShowArchived] = useState(false);
+
   const { data: threads = [] } = useQuery({
-    queryKey: ["threads", projectId],
-    queryFn: () => listFn({ data: { projectId } }) as Promise<Thread[]>,
+    queryKey: ["threads", projectId, showArchived],
+    queryFn: () =>
+      listFn({ data: { projectId, includeArchived: showArchived } }) as Promise<Thread[]>,
   });
 
   const invalidate = () =>
@@ -96,8 +112,9 @@ export function ThreadList({
     mutationFn: (id: string) => deleteFn({ data: { id } }),
     onSuccess: async () => {
       const res = (await qc.fetchQuery({
-        queryKey: ["threads", projectId],
-        queryFn: () => listFn({ data: { projectId } }) as Promise<Thread[]>,
+        queryKey: ["threads", projectId, false],
+        queryFn: () =>
+          listFn({ data: { projectId, includeArchived: false } }) as Promise<Thread[]>,
       })) as Thread[];
       invalidate();
       if (res[0]) {
@@ -112,7 +129,7 @@ export function ThreadList({
   });
 
   const updateMut = useMutation({
-    mutationFn: (v: { id: string; title?: string; pinned?: boolean }) =>
+    mutationFn: (v: { id: string; title?: string; pinned?: boolean; archived?: boolean }) =>
       updateFn({ data: v }),
     onSuccess: invalidate,
   });
@@ -123,10 +140,13 @@ export function ThreadList({
     return threads.filter((t) => t.title.toLowerCase().includes(q));
   }, [threads, query]);
 
-  const pinned = filtered.filter((t) => t.pinned);
-  const rest = filtered.filter((t) => !t.pinned);
+  const active = filtered.filter((t) => !t.archived);
+  const archived = filtered.filter((t) => t.archived);
+  const pinned = active.filter((t) => t.pinned);
+  const rest = active.filter((t) => !t.pinned);
   const byBucket: Record<string, Thread[]> = { today: [], yesterday: [], week: [], older: [] };
   for (const t of rest) byBucket[bucketOf(t.updated_at)].push(t);
+
 
   const commitRename = (id: string) => {
     const v = renameValue.trim();
@@ -216,6 +236,19 @@ export function ThreadList({
                 <Pencil className="h-3 w-3" />
               </button>
               <button
+                onClick={() =>
+                  updateMut.mutate({ id: t.id, archived: !t.archived, pinned: false })
+                }
+                className="p-0.5 hover:text-foreground"
+                title={t.archived ? "Unarchive" : "Archive"}
+              >
+                {t.archived ? (
+                  <ArchiveRestore className="h-3 w-3" />
+                ) : (
+                  <Archive className="h-3 w-3" />
+                )}
+              </button>
+              <button
                 onClick={() => setPendingDelete(t)}
                 className="p-0.5 hover:text-destructive"
                 title="Delete"
@@ -223,6 +256,7 @@ export function ThreadList({
                 <Trash2 className="h-3 w-3" />
               </button>
             </div>
+
           </>
         )}
       </div>
@@ -235,14 +269,27 @@ export function ThreadList({
         <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           Chats
         </span>
-        <button
-          onClick={() => createMut.mutate()}
-          className="flex items-center gap-1 rounded-md bg-primary/10 px-1.5 py-0.5 text-[11px] text-primary hover:bg-primary/20"
-          title="New chat"
-        >
-          <MessageSquarePlus className="h-3 w-3" />
-          New
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setShowArchived((v) => !v)}
+            className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] ${
+              showArchived
+                ? "bg-accent text-foreground"
+                : "text-muted-foreground hover:bg-accent/50"
+            }`}
+            title={showArchived ? "Hide archived" : "Show archived"}
+          >
+            <Archive className="h-3 w-3" />
+          </button>
+          <button
+            onClick={() => createMut.mutate()}
+            className="flex items-center gap-1 rounded-md bg-primary/10 px-1.5 py-0.5 text-[11px] text-primary hover:bg-primary/20"
+            title="New chat"
+          >
+            <MessageSquarePlus className="h-3 w-3" />
+            New
+          </button>
+        </div>
       </div>
       <div className="px-3 pb-2">
         <div className="relative">
@@ -277,7 +324,16 @@ export function ThreadList({
             </div>
           ) : null,
         )}
+        {showArchived && archived.length > 0 && (
+          <div>
+            <div className="px-3 pt-1 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Archived
+            </div>
+            {archived.map(renderRow)}
+          </div>
+        )}
       </div>
+
 
       <AlertDialog
         open={!!pendingDelete}
