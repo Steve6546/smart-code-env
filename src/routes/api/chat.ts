@@ -328,10 +328,14 @@ function makeTools(
   return {
     ...tools,
     patch_file: tools.edit_file,
+    apply_patch: tools.edit_file,
     create_file: tools.write_file,
     search_project: tools.grep,
+    grep_search: tools.grep,
+    list_dir: tools.list_files,
   };
 }
+
 
 
 export const Route = createFileRoute("/api/chat")({
