@@ -51,6 +51,7 @@ export type Database = {
       }
       chat_threads: {
         Row: {
+          archived: boolean
           auto_titled: boolean
           created_at: string
           id: string
@@ -61,6 +62,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          archived?: boolean
           auto_titled?: boolean
           created_at?: string
           id?: string
@@ -71,6 +73,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          archived?: boolean
           auto_titled?: boolean
           created_at?: string
           id?: string

@@ -1,0 +1,2 @@
+ALTER TABLE public.chat_threads ADD COLUMN IF NOT EXISTS archived boolean NOT NULL DEFAULT false;
+CREATE INDEX IF NOT EXISTS chat_threads_archived_idx ON public.chat_threads (project_id, archived, pinned DESC, updated_at DESC);
