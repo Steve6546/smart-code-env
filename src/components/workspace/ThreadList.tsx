@@ -2,7 +2,18 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { MessageSquarePlus, Trash2, Search, Pin, PinOff, Pencil, Check, X } from "lucide-react";
+import {
+  MessageSquarePlus,
+  Trash2,
+  Search,
+  Pin,
+  PinOff,
+  Pencil,
+  Check,
+  X,
+  Archive,
+  ArchiveRestore,
+} from "lucide-react";
 import {
   createThread,
   deleteThread,
@@ -27,7 +38,9 @@ type Thread = {
   created_at: string;
   pinned: boolean;
   auto_titled: boolean;
+  archived: boolean;
 };
+
 
 const DAY = 86_400_000;
 function bucketOf(iso: string): "today" | "yesterday" | "week" | "older" {
