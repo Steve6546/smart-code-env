@@ -212,12 +212,21 @@ export const movePath = createServerFn({ method: "POST" })
 
 export const listThreads = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({ projectId: z.string().uuid() }).parse(d))
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        projectId: z.string().uuid(),
+        includeArchived: z.boolean().optional(),
+      })
+      .parse(d),
+  )
   .handler(async ({ context, data }) => {
-    const { data: t, error } = await context.supabase
+    let q = context.supabase
       .from("chat_threads")
-      .select("id, title, updated_at, created_at, pinned, auto_titled")
-      .eq("project_id", data.projectId)
+      .select("id, title, updated_at, created_at, pinned, auto_titled, archived")
+      .eq("project_id", data.projectId);
+    if (!data.includeArchived) q = q.eq("archived", false);
+    const { data: t, error } = await q
       .order("pinned", { ascending: false })
       .order("updated_at", { ascending: false });
     if (error) throw new Error(error.message);
@@ -237,7 +246,7 @@ export const createThread = createServerFn({ method: "POST" })
         user_id: context.userId,
         title: data.title ?? "New chat",
       })
-      .select("id, title, updated_at, created_at, pinned, auto_titled")
+      .select("id, title, updated_at, created_at, pinned, auto_titled, archived")
       .single();
     if (error) throw new Error(error.message);
     return t;
@@ -251,6 +260,7 @@ export const updateThread = createServerFn({ method: "POST" })
         id: z.string().uuid(),
         title: z.string().min(1).max(200).optional(),
         pinned: z.boolean().optional(),
+        archived: z.boolean().optional(),
       })
       .parse(d),
   )
@@ -259,12 +269,14 @@ export const updateThread = createServerFn({ method: "POST" })
       title?: string;
       auto_titled?: boolean;
       pinned?: boolean;
+      archived?: boolean;
     } = {};
     if (data.title !== undefined) {
       patch.title = data.title;
       patch.auto_titled = true;
     }
     if (data.pinned !== undefined) patch.pinned = data.pinned;
+    if (data.archived !== undefined) patch.archived = data.archived;
     if (Object.keys(patch).length === 0) return { ok: true };
     const { error } = await context.supabase
       .from("chat_threads")
@@ -273,6 +285,7 @@ export const updateThread = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
 
 export const deleteThread = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
