@@ -269,14 +269,27 @@ export function ThreadList({
         <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           Chats
         </span>
-        <button
-          onClick={() => createMut.mutate()}
-          className="flex items-center gap-1 rounded-md bg-primary/10 px-1.5 py-0.5 text-[11px] text-primary hover:bg-primary/20"
-          title="New chat"
-        >
-          <MessageSquarePlus className="h-3 w-3" />
-          New
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setShowArchived((v) => !v)}
+            className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] ${
+              showArchived
+                ? "bg-accent text-foreground"
+                : "text-muted-foreground hover:bg-accent/50"
+            }`}
+            title={showArchived ? "Hide archived" : "Show archived"}
+          >
+            <Archive className="h-3 w-3" />
+          </button>
+          <button
+            onClick={() => createMut.mutate()}
+            className="flex items-center gap-1 rounded-md bg-primary/10 px-1.5 py-0.5 text-[11px] text-primary hover:bg-primary/20"
+            title="New chat"
+          >
+            <MessageSquarePlus className="h-3 w-3" />
+            New
+          </button>
+        </div>
       </div>
       <div className="px-3 pb-2">
         <div className="relative">
@@ -311,7 +324,16 @@ export function ThreadList({
             </div>
           ) : null,
         )}
+        {showArchived && archived.length > 0 && (
+          <div>
+            <div className="px-3 pt-1 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Archived
+            </div>
+            {archived.map(renderRow)}
+          </div>
+        )}
       </div>
+
 
       <AlertDialog
         open={!!pendingDelete}
