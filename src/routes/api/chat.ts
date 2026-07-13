@@ -87,9 +87,10 @@ function makeTools(
       description:
         "Create a new file or fully overwrite an existing file's contents. Use the full file path including folders.",
       inputSchema: z.object({
-        path: z.string().min(1).max(500),
-        content: z.string(),
+        path: z.string().min(1).max(500).regex(PATH_RE),
+        content: z.string().max(MAX_FILE_BYTES),
       }),
+
       execute: async ({ path, content }) => {
         await snap(path, "write_file");
 
