@@ -5,13 +5,27 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
 
 type OpenFile = { path: string; language?: string | null; content: string };
-type Body = {
-  messages: UIMessage[];
-  threadId: string;
-  projectId: string;
-  openFiles?: OpenFile[];
-  allFilePaths?: string[];
-};
+
+const MAX_FILE_BYTES = 1_000_000; // 1 MB
+const PATH_RE = /^[\w.\-/ ]+$/;
+const escapeLike = (s: string) => s.replace(/[\\%_]/g, (m) => `\\${m}`);
+
+const BodySchema = z.object({
+  threadId: z.string().uuid(),
+  projectId: z.string().uuid(),
+  messages: z.array(z.unknown()).min(1).max(200),
+  openFiles: z
+    .array(
+      z.object({
+        path: z.string().max(500),
+        language: z.string().nullish(),
+        content: z.string().max(MAX_FILE_BYTES),
+      }),
+    )
+    .max(20)
+    .optional(),
+  allFilePaths: z.array(z.string().max(500)).max(2000).optional(),
+});
 
 const langFromPath = (p: string): string => {
   const ext = p.split(".").pop()?.toLowerCase() ?? "";
@@ -19,6 +33,7 @@ const langFromPath = (p: string): string => {
     { py: "python", js: "javascript", ts: "typescript", tsx: "typescript", jsx: "javascript", html: "html", css: "css", json: "json", md: "markdown" }[ext] ?? "plaintext"
   );
 };
+
 
 type SnapshotRow = {
   path: string;
@@ -72,9 +87,10 @@ function makeTools(
       description:
         "Create a new file or fully overwrite an existing file's contents. Use the full file path including folders.",
       inputSchema: z.object({
-        path: z.string().min(1).max(500),
-        content: z.string(),
+        path: z.string().min(1).max(500).regex(PATH_RE),
+        content: z.string().max(MAX_FILE_BYTES),
       }),
+
       execute: async ({ path, content }) => {
         await snap(path, "write_file");
 
@@ -122,30 +138,33 @@ function makeTools(
     delete_path: tool({
       description:
         "Recursively delete a file OR folder and EVERYTHING inside it. Use for folders or bulk cleanup.",
-      inputSchema: z.object({ path: z.string() }),
+      inputSchema: z.object({ path: z.string().min(1).max(500).regex(PATH_RE) }),
       execute: async ({ path }) => {
         const prefix = path.replace(/\/+$/, "");
-        const { data: affected } = await supabase
+        const likePat = `${escapeLike(prefix)}/%`;
+        const exact = await supabase
           .from("files")
           .select("path, is_folder")
           .eq("project_id", projectId)
-          .or(`path.eq.${prefix},path.like.${prefix}/%`);
-        for (const a of affected ?? []) {
+          .eq("path", prefix);
+        const nested = await supabase
+          .from("files")
+          .select("path, is_folder")
+          .eq("project_id", projectId)
+          .like("path", likePat);
+        for (const a of [...(exact.data ?? []), ...(nested.data ?? [])]) {
           if (!a.is_folder) await snap(a.path, "delete_path");
         }
-
-        const { error } = await supabase
-          .from("files")
-          .delete()
-          .eq("project_id", projectId)
-          .or(`path.eq.${prefix},path.like.${prefix}/%`);
-        if (error) return { ok: false, error: error.message };
+        const d1 = await supabase.from("files").delete().eq("project_id", projectId).eq("path", prefix);
+        if (d1.error) return { ok: false, error: "Delete failed" };
+        const d2 = await supabase.from("files").delete().eq("project_id", projectId).like("path", likePat);
+        if (d2.error) return { ok: false, error: "Delete failed" };
         return { ok: true, action: "deleted", path };
       },
     }),
     create_folder: tool({
       description: "Create an empty folder at the given path.",
-      inputSchema: z.object({ path: z.string() }),
+      inputSchema: z.object({ path: z.string().min(1).max(500).regex(PATH_RE) }),
       execute: async ({ path }) => {
         const clean = path.replace(/\/+$/, "");
         const { error } = await supabase.from("files").insert({
@@ -156,13 +175,16 @@ function makeTools(
           language: null,
           is_folder: true,
         });
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: "Create failed" };
         return { ok: true, action: "created", path: clean };
       },
     }),
     rename_file: tool({
       description: "Rename or move a single file to a new path.",
-      inputSchema: z.object({ from: z.string(), to: z.string() }),
+      inputSchema: z.object({
+        from: z.string().min(1).max(500).regex(PATH_RE),
+        to: z.string().min(1).max(500).regex(PATH_RE),
+      }),
       execute: async ({ from, to }) => {
         await snap(from, "rename_from");
         await snap(to, "rename_to");
@@ -172,45 +194,56 @@ function makeTools(
           .update({ path: to, language: langFromPath(to) })
           .eq("project_id", projectId)
           .eq("path", from);
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: "Rename failed" };
         return { ok: true, action: "renamed", from, to };
       },
     }),
     move_path: tool({
       description:
         "Move or rename a file OR an entire folder (with all descendants). Rewrites the path prefix on every nested file.",
-      inputSchema: z.object({ from: z.string(), to: z.string() }),
+      inputSchema: z.object({
+        from: z.string().min(1).max(500).regex(PATH_RE),
+        to: z.string().min(1).max(500).regex(PATH_RE),
+      }),
       execute: async ({ from, to }) => {
         const f = from.replace(/\/+$/, "");
         const t = to.replace(/\/+$/, "");
-        const { data: rows, error: ferr } = await supabase
+        const likePat = `${escapeLike(f)}/%`;
+        const exact = await supabase
           .from("files")
           .select("id, path, is_folder")
           .eq("project_id", projectId)
-          .or(`path.eq.${f},path.like.${f}/%`);
-        if (ferr) return { ok: false, error: ferr.message };
-        for (const r of rows ?? []) {
+          .eq("path", f);
+        if (exact.error) return { ok: false, error: "Move failed" };
+        const nested = await supabase
+          .from("files")
+          .select("id, path, is_folder")
+          .eq("project_id", projectId)
+          .like("path", likePat);
+        if (nested.error) return { ok: false, error: "Move failed" };
+        const rows = [...(exact.data ?? []), ...(nested.data ?? [])];
+        for (const r of rows) {
           const np = r.path === f ? t : t + r.path.slice(f.length);
           if (!r.is_folder) {
             await snap(r.path, "move_from");
             await snap(np, "move_to");
           }
-
           await supabase
             .from("files")
             .update({ path: np, language: r.is_folder ? null : langFromPath(np) })
             .eq("id", r.id);
         }
-        return { ok: true, action: "renamed", from: f, to: t, moved: rows?.length ?? 0 };
+        return { ok: true, action: "renamed", from: f, to: t, moved: rows.length };
       },
     }),
+
     edit_file: tool({
       description:
         "Apply a precise string replacement to an existing file (apply_patch). Use for SMALL/TARGETED edits — never rewrite the whole file. `find` must uniquely identify ONE location (include surrounding context). Matching is tried in 3 passes: (1) literal, (2) normalised line-endings, (3) whitespace-insensitive. If nothing matches or more than one match is found, the call fails without changing the file — read_file again and retry with more context.",
       inputSchema: z.object({
         path: z.string(),
         find: z.string().min(1),
-        replace: z.string(),
+        replace: z.string().max(MAX_FILE_BYTES),
       }),
       execute: async ({ path, find, replace }) => {
         await snap(path, "edit_file");
@@ -356,16 +389,25 @@ export const Route = createFileRoute("/api/chat")({
         if (uerr || !userData.user) return new Response("Unauthorized", { status: 401 });
         const userId = userData.user.id;
 
-        const body = (await request.json()) as Body;
-        const { messages, threadId, projectId, openFiles = [], allFilePaths = [] } = body;
+        let parsed;
+        try {
+          parsed = BodySchema.parse(await request.json());
+        } catch {
+          return new Response("Invalid request body", { status: 400 });
+        }
+        const { threadId, projectId } = parsed;
+        const messages = parsed.messages as UIMessage[];
+        const openFiles: OpenFile[] = parsed.openFiles ?? [];
+        const allFilePaths: string[] = parsed.allFilePaths ?? [];
 
-        const { data: thread } = await supabase
-          .from("chat_threads")
-          .select("id")
-          .eq("id", threadId)
-          .eq("user_id", userId)
-          .maybeSingle();
+        // Verify thread AND project belong to the caller.
+        const [{ data: thread }, { data: proj }] = await Promise.all([
+          supabase.from("chat_threads").select("id").eq("id", threadId).eq("user_id", userId).maybeSingle(),
+          supabase.from("projects").select("id").eq("id", projectId).eq("user_id", userId).maybeSingle(),
+        ]);
         if (!thread) return new Response("Thread not found", { status: 404 });
+        if (!proj) return new Response("Project not found", { status: 404 });
+
 
         const last = messages[messages.length - 1];
         if (last && last.role === "user") {
