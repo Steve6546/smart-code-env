@@ -146,7 +146,7 @@ export const createFile = createServerFn({ method: "POST" })
 export const updateFile = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
-    z.object({ id: z.string().uuid(), content: z.string() }).parse(d),
+    z.object({ id: z.string().uuid(), content: z.string().max(MAX_FILE_BYTES) }).parse(d),
   )
   .handler(async ({ context, data }) => {
     const { error } = await context.supabase
@@ -154,6 +154,7 @@ export const updateFile = createServerFn({ method: "POST" })
       .update({ content: data.content })
       .eq("id", data.id);
     if (error) throw safeDbError(error);
+
     return { ok: true };
   });
 
