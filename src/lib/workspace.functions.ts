@@ -185,16 +185,28 @@ export const deleteFile = createServerFn({ method: "POST" })
 export const deletePath = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
-    z.object({ projectId: z.string().uuid(), path: z.string().min(1) }).parse(d),
+    z
+      .object({
+        projectId: z.string().uuid(),
+        path: z.string().min(1).max(500).regex(PATH_RE),
+      })
+      .parse(d),
   )
   .handler(async ({ context, data }) => {
     const prefix = data.path.replace(/\/+$/, "");
-    const { error } = await context.supabase
+    // Two parameterised deletes instead of a free-form .or() string
+    const del1 = await context.supabase
       .from("files")
       .delete()
       .eq("project_id", data.projectId)
-      .or(`path.eq.${prefix},path.like.${prefix}/%`);
-    if (error) throw safeDbError(error);
+      .eq("path", prefix);
+    if (del1.error) throw safeDbError(del1.error);
+    const del2 = await context.supabase
+      .from("files")
+      .delete()
+      .eq("project_id", data.projectId)
+      .like("path", `${escapeLike(prefix)}/%`);
+    if (del2.error) throw safeDbError(del2.error);
     return { ok: true };
   });
 
@@ -205,29 +217,37 @@ export const movePath = createServerFn({ method: "POST" })
     z
       .object({
         projectId: z.string().uuid(),
-        from: z.string().min(1),
-        to: z.string().min(1).max(500),
+        from: z.string().min(1).max(500).regex(PATH_RE),
+        to: z.string().min(1).max(500).regex(PATH_RE),
       })
       .parse(d),
   )
   .handler(async ({ context, data }) => {
     const from = data.from.replace(/\/+$/, "");
     const to = data.to.replace(/\/+$/, "");
-    const { data: rows, error: ferr } = await context.supabase
+    const exact = await context.supabase
       .from("files")
       .select("id, path, is_folder")
       .eq("project_id", data.projectId)
-      .or(`path.eq.${from},path.like.${from}/%`);
-    if (ferr) throw safeDbError(ferr);
-    for (const r of rows ?? []) {
+      .eq("path", from);
+    if (exact.error) throw safeDbError(exact.error);
+    const nested = await context.supabase
+      .from("files")
+      .select("id, path, is_folder")
+      .eq("project_id", data.projectId)
+      .like("path", `${escapeLike(from)}/%`);
+    if (nested.error) throw safeDbError(nested.error);
+    const rows = [...(exact.data ?? []), ...(nested.data ?? [])];
+    for (const r of rows) {
       const newPath = r.path === from ? to : to + r.path.slice(from.length);
       await context.supabase
         .from("files")
         .update({ path: newPath, language: r.is_folder ? null : langFromPath(newPath) })
         .eq("id", r.id);
     }
-    return { ok: true, moved: rows?.length ?? 0 };
+    return { ok: true, moved: rows.length };
   });
+
 
 export const listThreads = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
