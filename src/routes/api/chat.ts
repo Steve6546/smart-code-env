@@ -243,7 +243,7 @@ function makeTools(
       inputSchema: z.object({
         path: z.string(),
         find: z.string().min(1),
-        replace: z.string(),
+        replace: z.string().max(MAX_FILE_BYTES),
       }),
       execute: async ({ path, find, replace }) => {
         await snap(path, "edit_file");
