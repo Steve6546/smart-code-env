@@ -371,16 +371,25 @@ export const Route = createFileRoute("/api/chat")({
         if (uerr || !userData.user) return new Response("Unauthorized", { status: 401 });
         const userId = userData.user.id;
 
-        const body = (await request.json()) as Body;
-        const { messages, threadId, projectId, openFiles = [], allFilePaths = [] } = body;
+        let parsed;
+        try {
+          parsed = BodySchema.parse(await request.json());
+        } catch {
+          return new Response("Invalid request body", { status: 400 });
+        }
+        const { threadId, projectId } = parsed;
+        const messages = parsed.messages as UIMessage[];
+        const openFiles: OpenFile[] = parsed.openFiles ?? [];
+        const allFilePaths: string[] = parsed.allFilePaths ?? [];
 
-        const { data: thread } = await supabase
-          .from("chat_threads")
-          .select("id")
-          .eq("id", threadId)
-          .eq("user_id", userId)
-          .maybeSingle();
+        // Verify thread AND project belong to the caller.
+        const [{ data: thread }, { data: proj }] = await Promise.all([
+          supabase.from("chat_threads").select("id").eq("id", threadId).eq("user_id", userId).maybeSingle(),
+          supabase.from("projects").select("id").eq("id", projectId).eq("user_id", userId).maybeSingle(),
+        ]);
         if (!thread) return new Response("Thread not found", { status: 404 });
+        if (!proj) return new Response("Project not found", { status: 404 });
+
 
         const last = messages[messages.length - 1];
         if (last && last.role === "user") {
