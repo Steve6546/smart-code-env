@@ -2,6 +2,24 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
+// --- Security helpers ---
+const MAX_FILE_BYTES = 1_000_000; // 1 MB per file
+const PATH_RE = /^[\w.\-/ ]+$/;
+const escapeLike = (s: string) => s.replace(/[\\%_]/g, (m) => `\\${m}`);
+
+const PG_MSG: Record<string, string> = {
+  "23505": "This item already exists.",
+  "23503": "Related record not found.",
+  "23502": "A required field is missing.",
+  "23514": "Value violates a validation rule.",
+  "42501": "You don't have permission to perform this action.",
+};
+function safeDbError(error: { code?: string; message: string }, fallback = "Operation failed"): Error {
+  console.error("[workspace] DB error:", error.code, error.message);
+  return new Error(PG_MSG[error.code ?? ""] ?? fallback);
+}
+
+
 const STARTER_FILES: { path: string; content: string; language: string }[] = [
   {
     path: "README.md",
