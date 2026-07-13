@@ -5,13 +5,27 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
 
 type OpenFile = { path: string; language?: string | null; content: string };
-type Body = {
-  messages: UIMessage[];
-  threadId: string;
-  projectId: string;
-  openFiles?: OpenFile[];
-  allFilePaths?: string[];
-};
+
+const MAX_FILE_BYTES = 1_000_000; // 1 MB
+const PATH_RE = /^[\w.\-/ ]+$/;
+const escapeLike = (s: string) => s.replace(/[\\%_]/g, (m) => `\\${m}`);
+
+const BodySchema = z.object({
+  threadId: z.string().uuid(),
+  projectId: z.string().uuid(),
+  messages: z.array(z.unknown()).min(1).max(200),
+  openFiles: z
+    .array(
+      z.object({
+        path: z.string().max(500),
+        language: z.string().nullish(),
+        content: z.string().max(MAX_FILE_BYTES),
+      }),
+    )
+    .max(20)
+    .optional(),
+  allFilePaths: z.array(z.string().max(500)).max(2000).optional(),
+});
 
 const langFromPath = (p: string): string => {
   const ext = p.split(".").pop()?.toLowerCase() ?? "";
@@ -19,6 +33,7 @@ const langFromPath = (p: string): string => {
     { py: "python", js: "javascript", ts: "typescript", tsx: "typescript", jsx: "javascript", html: "html", css: "css", json: "json", md: "markdown" }[ext] ?? "plaintext"
   );
 };
+
 
 type SnapshotRow = {
   path: string;
